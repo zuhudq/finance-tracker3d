@@ -9,22 +9,25 @@ import {
   Legend,
 } from "recharts";
 
-interface Transaction {
+// STRUKTUR DATA KEMBAR IDENTIK
+export interface Transaction {
+  id: string;
   amount: number;
-  categories: { name: string; type: string };
+  description: string;
+  created_at: string;
+  categories: { id?: string; name: string; type: string } | null;
+  accounts: { name: string } | null;
 }
 
 interface ExpenseChartProps {
   transactions: Transaction[];
 }
 
-// 1. Pindah CustomTooltip ke LUAR komponen utama agar tidak memicu error re-render
 const CustomTooltip = ({
   active,
   payload,
 }: {
   active?: boolean;
-  // Ganti any[] menjadi struktur objek yang jelas
   payload?: { name: string; value: number }[];
 }) => {
   if (active && payload && payload.length) {
