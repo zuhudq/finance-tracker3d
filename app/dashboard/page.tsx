@@ -83,7 +83,6 @@ export default function DashboardPage() {
   const [totalBalance, setTotalBalance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // States untuk berbagai Modal
   const [isAccountModalOpen, setIsAccountModalOpen] = useState<boolean>(false);
   const [newName, setNewName] = useState<string>("");
   const [newType, setNewType] = useState<string>("debit");
@@ -91,6 +90,9 @@ export default function DashboardPage() {
 
   const [isTxModalOpen, setIsTxModalOpen] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+
   const [txType, setTxType] = useState<string>("expense");
   const [txAccountId, setTxAccountId] = useState<string>("");
   const [txDestinationAccountId, setTxDestinationAccountId] =
@@ -99,7 +101,6 @@ export default function DashboardPage() {
   const [txAmount, setTxAmount] = useState<string>("");
   const [txDesc, setTxDesc] = useState<string>("");
 
-  // STATE MODAL BARU: Isi Saldo Target
   const [isGoalModalOpen, setIsGoalModalOpen] = useState<boolean>(false);
   const [selectedGoalId, setSelectedGoalId] = useState<string>("");
   const [selectedGoalName, setSelectedGoalName] = useState<string>("");
@@ -220,7 +221,55 @@ export default function DashboardPage() {
     router.push("/");
   };
 
-  // FUNGSI BARU: Proses Isi Saldo Target
+  const fileToBase64 = (
+    file: File,
+  ): Promise<{ base64: string; mimeType: string }> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          const [metadata, base64Data] = reader.result.split(",");
+          const mimeType = metadata.match(/:(.*?);/)?.[1] || "image/jpeg";
+          resolve({ base64: base64Data, mimeType });
+        }
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  const handleScanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    try {
+      const { base64, mimeType } = await fileToBase64(file);
+
+      const response = await fetch("/api/scan-receipt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64, mimeType }),
+      });
+
+      if (!response.ok) throw new Error("Gagal memindai struk");
+
+      const data = await response.json();
+
+      if (data.amount) setTxAmount(data.amount.toString());
+      if (data.description) setTxDesc(data.description);
+      setTxType("expense");
+    } catch (error) {
+      console.error(error);
+      alert(
+        "AI kesulitan membaca struk ini. Coba gunakan foto yang lebih terang.",
+      );
+    } finally {
+      setIsScanning(false);
+      e.target.value = "";
+    }
+  };
+
   const handleTopUpGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -231,12 +280,10 @@ export default function DashboardPage() {
         setIsSubmitting(false);
         return;
       }
-
-      // 1. Cek & Kurangi saldo rekening utama
       const sourceAcc = accounts.find((a) => a.id === txAccountId);
       if (sourceAcc) {
         if (Number(sourceAcc.current_balance) < numericAmount) {
-          alert("Saldo dompet tidak mencukupi untuk top-up ini!");
+          alert("Saldo dompet tidak mencukupi!");
           setIsSubmitting(false);
           return;
         }
@@ -247,8 +294,6 @@ export default function DashboardPage() {
           })
           .eq("id", txAccountId);
       }
-
-      // 2. Tambah saldo di tabel goals
       const targetGoal = goals.find((g) => g.id === selectedGoalId);
       if (targetGoal) {
         await supabase
@@ -258,8 +303,6 @@ export default function DashboardPage() {
           })
           .eq("id", selectedGoalId);
       }
-
-      // Reset form dan ambil data terbaru
       setGoalTopUpAmount("");
       setIsGoalModalOpen(false);
       await fetchData();
@@ -272,7 +315,6 @@ export default function DashboardPage() {
   };
 
   const handleAddAccount = async (e: React.FormEvent) => {
-    /* ... Sama ... */
     e.preventDefault();
     setIsSubmitting(true);
     try {
@@ -295,7 +337,6 @@ export default function DashboardPage() {
   };
 
   const handleAddTransaction = async (e: React.FormEvent) => {
-    /* ... Sama ... */
     e.preventDefault();
     setIsSubmitting(true);
     try {
@@ -503,7 +544,7 @@ export default function DashboardPage() {
               </div>
               <button
                 onClick={() => setIsTxModalOpen(true)}
-                className="w-full py-4 rounded-2xl bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 font-medium pt-4"
+                className="w-full py-4 rounded-2xl bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 font-medium pt-4 shadow-[0_0_15px_rgba(34,211,238,0.2)] hover:shadow-[0_0_25px_rgba(34,211,238,0.4)] transition-all"
               >
                 + Catat Transaksi
               </button>
@@ -536,7 +577,6 @@ export default function DashboardPage() {
               <h2 className="text-lg font-bold text-white mb-6">
                 Target Finansial
               </h2>
-              {/* PENYAMBUNGAN PROPS MODAL KE KOMPONEN */}
               <FinancialGoals
                 goals={goals}
                 onOpenTopUp={(id, name) => {
@@ -604,7 +644,6 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      {/* MODAL ISI SALDO TARGET BARU */}
       {isGoalModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md bg-chill-bg border border-white/10 rounded-3xl p-8 shadow-2xl relative">
@@ -620,7 +659,6 @@ export default function DashboardPage() {
             <p className="text-indigo-400 font-medium mb-6">
               {selectedGoalName}
             </p>
-
             <form onSubmit={handleTopUpGoal} className="space-y-5">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase">
@@ -630,7 +668,7 @@ export default function DashboardPage() {
                   required
                   value={txAccountId}
                   onChange={(e) => setTxAccountId(e.target.value)}
-                  className="w-full bg-chill-bg border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 appearance-none"
+                  className="w-full bg-chill-bg border border-white/10 rounded-xl px-4 py-3 text-white"
                 >
                   <option value="" disabled>
                     Pilih sumber dana...
@@ -652,14 +690,14 @@ export default function DashboardPage() {
                   min="1"
                   value={goalTopUpAmount}
                   onChange={(e) => setGoalTopUpAmount(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
                   placeholder="Misal: 50000"
                 />
               </div>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-4 rounded-xl font-bold mt-4 bg-indigo-500 text-white hover:bg-indigo-400 transition-all disabled:opacity-50"
+                className="w-full py-4 rounded-xl font-bold mt-4 bg-indigo-500 text-white hover:bg-indigo-400 disabled:opacity-50"
               >
                 {isSubmitting ? "Memproses..." : "Tambahkan ke Tabungan"}
               </button>
@@ -668,7 +706,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* MODAL TRANSAKSI TETAP SAMA */}
       {isTxModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md bg-chill-bg border border-white/10 rounded-3xl p-8 shadow-2xl relative">
@@ -681,6 +718,28 @@ export default function DashboardPage() {
             <h2 className="text-2xl font-bold text-white mb-6">
               Catat Transaksi
             </h2>
+
+            <div className="mb-5">
+              <label className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-linear-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/30 text-emerald-400 font-medium cursor-pointer hover:bg-emerald-500/20 transition-all shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+                {isScanning ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>{" "}
+                    AI Sedang Membaca...
+                  </>
+                ) : (
+                  <>📷 Auto-Scan Struk AI</>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handleScanReceipt}
+                  disabled={isScanning}
+                />
+              </label>
+            </div>
+
             <form onSubmit={handleAddTransaction} className="space-y-5">
               <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
                 <button
@@ -816,7 +875,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* MODAL TAMBAH AKUN TETAP SAMA */}
       {isAccountModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md bg-chill-bg border border-white/10 rounded-3xl p-8 shadow-2xl relative">
