@@ -23,69 +23,102 @@ export default function SubscriptionRadar({
 
   if (subscriptions.length === 0) {
     return (
-      <div className="p-4 text-center border border-dashed border-white/10 rounded-2xl bg-white/5">
-        <p className="text-xs text-slate-500 italic">
-          Bebas dari beban tagihan rutin.
+      <div className="py-8 text-center border border-dashed border-[#2a2520] rounded-2xl">
+        <p className="text-[11px] text-[#5a5248] italic">
+          Tidak ada tagihan rutin aktif.
         </p>
       </div>
     );
   }
 
-  // Hitung total beban bulanan
   const totalMonthly = subscriptions.reduce(
     (sum, sub) => sum + Number(sub.amount),
     0,
   );
-  // Dapatkan tanggal hari ini (1-31)
   const today = new Date().getDate();
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-end mb-4 bg-white/5 p-4 rounded-2xl border border-white/5">
+    <div className="space-y-3">
+      {/* Summary card */}
+      <div
+        className="flex justify-between items-center p-4 rounded-2xl"
+        style={{
+          background:
+            "linear-gradient(135deg, rgba(200,168,107,0.06), rgba(138,106,48,0.04))",
+          border: "1px solid rgba(200,168,107,0.1)",
+        }}
+      >
         <div>
-          <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">
+          <p className="text-[10px] text-[#6b6058] uppercase tracking-widest font-semibold mb-1">
             Total Beban Tetap
           </p>
-          <p className="text-2xl font-bold text-white mt-1">
+          <p
+            className="text-xl font-bold tracking-tight"
+            style={{ color: "#c8a86b" }}
+          >
             {formatRupiah(totalMonthly)}
           </p>
         </div>
-        <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center border border-amber-500/30 text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-base"
+          style={{
+            background: "rgba(200,168,107,0.08)",
+            border: "1px solid rgba(200,168,107,0.15)",
+          }}
+        >
           ⚡
         </div>
       </div>
 
-      <div className="space-y-3">
+      {/* List */}
+      <div className="space-y-1.5">
         {subscriptions.map((sub) => {
-          // Logika sederhana untuk menghitung sisa hari
           let daysLeft = sub.billing_date - today;
-          if (daysLeft < 0) daysLeft += 30; // Jika sudah lewat bulan ini, hitung untuk bulan depan
-
-          // Peringatan jika tagihan kurang dari atau sama dengan 5 hari
+          if (daysLeft < 0) daysLeft += 30;
           const isDueSoon = daysLeft <= 5;
 
           return (
             <div
               key={sub.id}
-              className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all"
+              className="flex justify-between items-center px-3.5 py-3 rounded-xl transition-all duration-200"
+              style={{
+                background: "rgba(255,255,255,0.02)",
+                border: isDueSoon
+                  ? "1px solid rgba(232,115,90,0.2)"
+                  : "1px solid rgba(255,255,255,0.04)",
+              }}
             >
               <div className="flex items-center gap-3">
-                {/* Indikator Status */}
+                {/* Dot indicator */}
                 <div
-                  className={`w-1.5 h-8 rounded-full ${isDueSoon ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]" : "bg-slate-600"}`}
-                ></div>
+                  className="w-1 h-7 rounded-full"
+                  style={{
+                    background: isDueSoon
+                      ? "linear-gradient(180deg, #e8735a, #c0422a)"
+                      : "rgba(255,255,255,0.08)",
+                    boxShadow: isDueSoon
+                      ? "0 0 6px rgba(232,115,90,0.5)"
+                      : "none",
+                  }}
+                />
                 <div>
-                  <p className="text-sm text-white font-medium">{sub.name}</p>
+                  <p className="text-[13px] text-[#d4c8bc] font-medium">
+                    {sub.name}
+                  </p>
                   <p
-                    className={`text-[10px] mt-0.5 uppercase tracking-wide ${isDueSoon ? "text-amber-400 font-bold animate-pulse" : "text-slate-400"}`}
+                    className="text-[10px] mt-0.5 uppercase tracking-wide"
+                    style={{ color: isDueSoon ? "#e8735a" : "#5a5248" }}
                   >
                     {isDueSoon
-                      ? `Jatuh tempo dalam ${daysLeft} hari`
-                      : `Tgl tagihan: ${sub.billing_date}`}
+                      ? `${daysLeft} hari lagi`
+                      : `tgl. ${sub.billing_date}`}
                   </p>
                 </div>
               </div>
-              <p className="font-semibold text-slate-200 text-sm">
+              <p
+                className="text-[13px] font-semibold tabular-nums"
+                style={{ color: "#a89880" }}
+              >
                 {formatRupiah(sub.amount)}
               </p>
             </div>

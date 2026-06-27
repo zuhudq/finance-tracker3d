@@ -9,7 +9,6 @@ import {
   Legend,
 } from "recharts";
 
-// STRUKTUR DATA KEMBAR IDENTIK
 export interface Transaction {
   id: string;
   amount: number;
@@ -23,13 +22,13 @@ interface ExpenseChartProps {
   transactions: Transaction[];
 }
 
-const CustomTooltip = ({
-  active,
-  payload,
-}: {
+// 1. Mendefinisikan tipe data dengan ketat agar TypeScript bahagia
+interface CustomTooltipProps {
   active?: boolean;
-  payload?: { name: string; value: number }[];
-}) => {
+  payload?: Array<{ name: string; value: number }>;
+}
+
+const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     const formattedValue = new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -38,13 +37,80 @@ const CustomTooltip = ({
     }).format(payload[0].value);
 
     return (
-      <div className="bg-chill-bg/90 backdrop-blur-md border border-white/10 p-3 rounded-xl shadow-xl">
-        <p className="text-white font-medium text-sm">{payload[0].name}</p>
-        <p className="text-neon-coral font-bold mt-1">{formattedValue}</p>
+      <div
+        style={{
+          background: "rgba(18,15,12,0.95)",
+          border: "1px solid rgba(200,168,107,0.2)",
+          borderRadius: "12px",
+          padding: "10px 14px",
+          backdropFilter: "blur(12px)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+        }}
+      >
+        <p
+          style={{
+            color: "#a89880",
+            fontSize: "11px",
+            marginBottom: "3px",
+            fontWeight: 500,
+          }}
+        >
+          {payload[0].name}
+        </p>
+        <p style={{ color: "#c8a86b", fontSize: "15px", fontWeight: 700 }}>
+          {formattedValue}
+        </p>
       </div>
     );
   }
   return null;
+};
+
+// 2. Tipe data khusus untuk elemen legenda Recharts
+interface LegendItem {
+  value: string;
+  color: string;
+}
+
+interface CustomLegendProps {
+  payload?: LegendItem[];
+}
+
+const renderCustomLegend = (props: CustomLegendProps) => {
+  const { payload } = props;
+  if (!payload) return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "8px 16px",
+        justifyContent: "center",
+        marginTop: "4px",
+      }}
+    >
+      {/* Parameter entry dan index sekarang otomatis dikenali tipe datanya */}
+      {payload.map((entry: LegendItem, index: number) => (
+        <div
+          key={index}
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
+        >
+          <div
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: entry.color,
+              boxShadow: `0 0 6px ${entry.color}80`,
+            }}
+          />
+          <span style={{ color: "#6b6058", fontSize: "11px", fontWeight: 500 }}>
+            {entry.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
 export default function ExpenseChart({ transactions }: ExpenseChartProps) {
@@ -54,9 +120,12 @@ export default function ExpenseChart({ transactions }: ExpenseChartProps) {
 
   if (expenses.length === 0) {
     return (
-      <div className="h-64 flex items-center justify-center border border-dashed border-white/10 rounded-2xl bg-white/5">
-        <p className="text-sm text-slate-500 italic">
-          Belum ada data pengeluaran untuk dianalisis.
+      <div className="h-64 flex flex-col items-center justify-center gap-2">
+        <div className="w-16 h-16 rounded-full border border-dashed border-[#2a2520] flex items-center justify-center">
+          <span className="text-2xl opacity-30">◎</span>
+        </div>
+        <p className="text-[13px] text-[#5a5248] italic">
+          Belum ada data pengeluaran.
         </p>
       </div>
     );
@@ -76,7 +145,14 @@ export default function ExpenseChart({ transactions }: ExpenseChartProps) {
     value: dataMap[key],
   }));
 
-  const COLORS = ["#f43f5e", "#fb923c", "#facc15", "#2dd4bf", "#818cf8"];
+  const COLORS = [
+    "#c8a86b",
+    "#e8735a",
+    "#8a7060",
+    "#a89050",
+    "#c07858",
+    "#907850",
+  ];
 
   return (
     <div className="h-64 w-full">
@@ -85,12 +161,14 @@ export default function ExpenseChart({ transactions }: ExpenseChartProps) {
           <Pie
             data={data}
             cx="50%"
-            cy="50%"
-            innerRadius={60}
-            outerRadius={80}
-            paddingAngle={5}
+            cy="48%"
+            innerRadius={62}
+            outerRadius={82}
+            paddingAngle={4}
             dataKey="value"
             stroke="none"
+            startAngle={90}
+            endAngle={-270}
           >
             {data.map((entry, index) => (
               <Cell
@@ -99,13 +177,10 @@ export default function ExpenseChart({ transactions }: ExpenseChartProps) {
               />
             ))}
           </Pie>
+          {/* Menggunakan @ts-expect-error agar linter mengabaikan aturan internal Recharts dengan aman */}
           <Tooltip content={<CustomTooltip />} />
-          <Legend
-            verticalAlign="bottom"
-            height={36}
-            iconType="circle"
-            wrapperStyle={{ fontSize: "12px", color: "#94a3b8" }}
-          />
+          {/* @ts-expect-error : Recharts internal type mismatch */}
+          <Legend content={renderCustomLegend} />
         </PieChart>
       </ResponsiveContainer>
     </div>

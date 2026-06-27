@@ -68,13 +68,173 @@ interface HistoryItem {
   categoryName: string;
 }
 
-// STRUKTUR DATA TOAST (POP-UP)
 interface ToastMessage {
   title: string;
   message: string;
   type: "success" | "error";
 }
 
+// ─── Shared style tokens ────────────────────────────────────────────────────
+const BG = "#0a0906";
+const SURFACE = "#0f0d0a";
+const SURFACE2 = "#141210";
+const BORDER = "rgba(255,255,255,0.05)";
+const GOLD = "#c8a86b";
+const GOLD_MUTED = "#8a6a30";
+const TEXT_PRIMARY = "#e8ddd0";
+const TEXT_SECONDARY = "#a89880";
+const TEXT_MUTED = "#6b6058";
+const CORAL = "#e8735a";
+
+// ─── Input / Select shared className ────────────────────────────────────────
+const inputCls =
+  "w-full rounded-xl px-4 py-3 text-[13px] text-[#e8ddd0] placeholder-[#4a4238] outline-none transition-all duration-150 focus:ring-0";
+const inputStyle = {
+  background: "rgba(255,255,255,0.03)",
+  border: "1px solid rgba(255,255,255,0.07)",
+};
+const inputFocusStyle = {
+  borderColor: "rgba(200,168,107,0.3)",
+  boxShadow: "0 0 0 3px rgba(200,168,107,0.05)",
+};
+
+function GoldInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <input
+      {...props}
+      className={inputCls + " " + (props.className || "")}
+      style={{
+        ...inputStyle,
+        ...(focused ? inputFocusStyle : {}),
+        ...props.style,
+      }}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+    />
+  );
+}
+
+function GoldSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <select
+      {...props}
+      className={
+        inputCls + " appearance-none cursor-pointer " + (props.className || "")
+      }
+      style={{
+        ...inputStyle,
+        ...(focused ? inputFocusStyle : {}),
+        background: SURFACE2,
+        ...props.style,
+      }}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+    />
+  );
+}
+
+// ─── Label ──────────────────────────────────────────────────────────────────
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label
+      className="block text-[10px] font-semibold uppercase tracking-[0.12em] mb-2"
+      style={{ color: TEXT_MUTED }}
+    >
+      {children}
+    </label>
+  );
+}
+
+// ─── Section heading ─────────────────────────────────────────────────────────
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-5">
+      <div className="w-0.5 h-4 rounded-full" style={{ background: GOLD }} />
+      <h2
+        className="text-[13px] font-semibold tracking-[0.06em] uppercase"
+        style={{ color: TEXT_MUTED }}
+      >
+        {children}
+      </h2>
+    </div>
+  );
+}
+
+// ─── Card wrapper ─────────────────────────────────────────────────────────────
+function Card({
+  children,
+  className = "",
+  style = {},
+}: {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      className={`rounded-2xl ${className}`}
+      style={{
+        background: SURFACE,
+        border: `1px solid ${BORDER}`,
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─── Modal backdrop ───────────────────────────────────────────────────────────
+function Modal({
+  onClose,
+  children,
+}: {
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl p-7 relative"
+        style={{
+          background: "#100e0b",
+          border: `1px solid rgba(255,255,255,0.08)`,
+          boxShadow: "0 32px 80px rgba(0,0,0,0.8)",
+        }}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-5 right-5 w-7 h-7 rounded-full flex items-center justify-center text-[12px] transition-all"
+          style={{
+            color: TEXT_MUTED,
+            background: "rgba(255,255,255,0.04)",
+            border: BORDER,
+          }}
+        >
+          ✕
+        </button>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── Account type badge ───────────────────────────────────────────────────────
+const typeLabel: Record<string, string> = {
+  debit: "Bank",
+  "e-wallet": "E-Wallet",
+  cash: "Tunai",
+};
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -112,10 +272,8 @@ export default function DashboardPage() {
   const [selectedGoalName, setSelectedGoalName] = useState<string>("");
   const [goalTopUpAmount, setGoalTopUpAmount] = useState<string>("");
 
-  // STATE BARU: Notifikasi Pop-up (Toast)
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
-  // FUNGSI BARU: Pemicu Pop-up yang akan hilang otomatis dalam 3.5 detik
   const showToast = (
     title: string,
     message: string,
@@ -266,7 +424,6 @@ export default function DashboardPage() {
     });
   };
 
-  // LOGIKA BARU: AI SCANNER DENGAN AUTO-SAVE
   const handleScanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -284,15 +441,10 @@ export default function DashboardPage() {
       if (!response.ok) throw new Error(data.error || "Gagal memindai struk");
 
       if (data.amount && data.amount > 0) {
-        // PERSIAPAN AUTO-SAVE
         const finalAmount = Number(data.amount);
         const finalDesc = data.description || "Auto-scan Transaksi";
-
-        // Pilih dompet aktif, atau dompet pertama jika belum ada yang terpilih
         const finalAccId =
           txAccountId || (accounts.length > 0 ? accounts[0].id : "");
-
-        // Pilih kategori aktif, atau pilih kategori pengeluaran pertama secara otomatis
         const expenseCategories = categories.filter(
           (c) => c.type === "expense",
         );
@@ -309,7 +461,6 @@ export default function DashboardPage() {
           return;
         }
 
-        // EKSEKUSI SIMPAN OTOMATIS KE DATABASE
         const { error: txError } = await supabase.from("transactions").insert([
           {
             account_id: finalAccId,
@@ -321,27 +472,22 @@ export default function DashboardPage() {
 
         if (txError) throw txError;
 
-        // EKSEKUSI POTONG SALDO OTOMATIS
         const selectedAccount = accounts.find((a) => a.id === finalAccId);
         if (selectedAccount) {
-          const newBalance =
-            Number(selectedAccount.current_balance) - finalAmount;
+          const newBal = Number(selectedAccount.current_balance) - finalAmount;
           await supabase
             .from("accounts")
-            .update({ current_balance: newBalance })
+            .update({ current_balance: newBal })
             .eq("id", finalAccId);
         }
 
-        // BERSIHKAN FORM & TUTUP MODAL
         setTxAmount("");
         setTxDesc("");
         setIsTxModalOpen(false);
         await fetchData();
-
-        // TAMPILKAN POP-UP PREMIUM
         showToast(
-          "Ajaib! 🪄",
-          "Struk dipindai & disimpan otomatis.",
+          "Auto-Scan Berhasil",
+          "Data transaksi dari struk telah dicatat secara otomatis.",
           "success",
         );
       } else {
@@ -401,8 +547,8 @@ export default function DashboardPage() {
       setIsGoalModalOpen(false);
       await fetchData();
       showToast(
-        "Target Diperbarui",
-        "Saldo tabungan berhasil diisi.",
+        "Alokasi Berhasil",
+        "Dana telah ditambahkan ke target finansialmu.",
         "success",
       );
     } catch (error) {
@@ -456,16 +602,14 @@ export default function DashboardPage() {
           setIsSubmitting(false);
           return;
         }
-        await supabase
-          .from("transfers")
-          .insert([
-            {
-              source_account_id: txAccountId,
-              destination_account_id: txDestinationAccountId,
-              amount: numericAmount,
-              description: txDesc || "Transfer Dana",
-            },
-          ]);
+        await supabase.from("transfers").insert([
+          {
+            source_account_id: txAccountId,
+            destination_account_id: txDestinationAccountId,
+            amount: numericAmount,
+            description: txDesc || "Transfer Dana",
+          },
+        ]);
         const sourceAcc = accounts.find((a) => a.id === txAccountId);
         const destAcc = accounts.find((a) => a.id === txDestinationAccountId);
         if (sourceAcc && destAcc) {
@@ -489,25 +633,23 @@ export default function DashboardPage() {
           setIsSubmitting(false);
           return;
         }
-        await supabase
-          .from("transactions")
-          .insert([
-            {
-              account_id: txAccountId,
-              category_id: txCategoryId,
-              amount: numericAmount,
-              description: txDesc,
-            },
-          ]);
+        await supabase.from("transactions").insert([
+          {
+            account_id: txAccountId,
+            category_id: txCategoryId,
+            amount: numericAmount,
+            description: txDesc,
+          },
+        ]);
         const selectedAccount = accounts.find((a) => a.id === txAccountId);
         if (selectedAccount) {
-          const newBalance =
+          const newBal =
             txType === "income"
               ? Number(selectedAccount.current_balance) + numericAmount
               : Number(selectedAccount.current_balance) - numericAmount;
           await supabase
             .from("accounts")
-            .update({ current_balance: newBalance })
+            .update({ current_balance: newBal })
             .eq("id", txAccountId);
         }
       }
@@ -516,7 +658,11 @@ export default function DashboardPage() {
       setTxDestinationAccountId("");
       setIsTxModalOpen(false);
       await fetchData();
-      showToast("Berhasil", "Transaksi manual tersimpan.", "success");
+      showToast(
+        "Transaksi Tercatat",
+        "Data pergerakan kas telah diperbarui.",
+        "success",
+      );
     } catch (error) {
       console.error(error);
       showToast("Gagal", "Sistem gagal mencatat data.", "error");
@@ -532,40 +678,79 @@ export default function DashboardPage() {
       minimumFractionDigits: 0,
     }).format(value);
 
+  // ─── Loading ───────────────────────────────────────────────────────────────
   if (isLoading)
     return (
-      <div className="min-h-screen bg-chill-bg flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-neon-cyan border-t-transparent rounded-full animate-spin"></div>
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: BG }}
+      >
+        <div
+          className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
+          style={{ borderColor: `${GOLD} transparent ${GOLD} ${GOLD}` }}
+        />
       </div>
     );
+
+  // ─── Onboarding ────────────────────────────────────────────────────────────
   if (accounts.length === 0) {
     return (
-      <main className="min-h-screen bg-chill-bg flex items-center justify-center p-6">
-        <div className="w-full max-w-lg bg-white/5 backdrop-blur-xl border border-white/10 p-10 rounded-3xl text-center">
-          <h1 className="text-3xl font-bold text-white mb-3">
-            Langkah Pertama
-          </h1>
-          <form onSubmit={handleAddAccount} className="space-y-5">
-            <input
-              type="text"
-              required
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-neon-cyan"
-              placeholder="Nama Rekening"
-            />
-            <input
-              type="number"
-              required
-              value={newBalance}
-              onChange={(e) => setNewBalance(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-neon-cyan"
-              placeholder="Saldo Awal"
-            />
+      <main
+        className="min-h-screen flex items-center justify-center p-6"
+        style={{ background: BG }}
+      >
+        <div
+          className="w-full max-w-md rounded-2xl p-8"
+          style={{
+            background: SURFACE,
+            border: `1px solid ${BORDER}`,
+            boxShadow: "0 40px 100px rgba(0,0,0,0.6)",
+          }}
+        >
+          <div className="mb-8">
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.15em] mb-3"
+              style={{ color: GOLD }}
+            >
+              Langkah Pertama
+            </p>
+            <h1 className="text-2xl font-bold" style={{ color: TEXT_PRIMARY }}>
+              Tambah Rekening
+            </h1>
+            <p className="text-[13px] mt-1" style={{ color: TEXT_MUTED }}>
+              Mulai pantau keuanganmu dari sini.
+            </p>
+          </div>
+          <form onSubmit={handleAddAccount} className="space-y-4">
+            <div>
+              <FieldLabel>Nama Rekening</FieldLabel>
+              <GoldInput
+                type="text"
+                required
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="cth. BCA Utama"
+              />
+            </div>
+            <div>
+              <FieldLabel>Saldo Awal</FieldLabel>
+              <GoldInput
+                type="number"
+                required
+                value={newBalance}
+                onChange={(e) => setNewBalance(e.target.value)}
+                placeholder="0"
+              />
+            </div>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-4 rounded-xl bg-neon-cyan text-chill-bg font-bold"
+              className="w-full py-3.5 rounded-xl text-[13px] font-semibold mt-2 transition-all"
+              style={{
+                background: `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`,
+                color: "#0a0906",
+                opacity: isSubmitting ? 0.6 : 1,
+              }}
             >
               {isSubmitting ? "Menyimpan..." : "Mulai Perjalanan"}
             </button>
@@ -574,519 +759,668 @@ export default function DashboardPage() {
       </main>
     );
   }
+
   const filteredCategories = categories.filter((c) => c.type === txType);
 
-  return (
-    <main className="min-h-screen p-8 flex flex-col relative bg-chill-bg overflow-hidden">
-      <div className="absolute top-[-10%] left-[-5%] w-100 h-100 rounded-full bg-neon-cyan/5 blur-[120px] pointer-events-none z-0"></div>
+  const txTypeConfig = {
+    expense: { label: "Pengeluaran", color: CORAL, bg: `${CORAL}15` },
+    income: { label: "Pemasukan", color: GOLD, bg: `${GOLD}15` },
+    transfer: {
+      label: "Transfer",
+      color: "#a89880",
+      bg: "rgba(168,152,128,0.1)",
+    },
+  };
 
-      {/* KOMPONEN POP-UP TOAST (PREMIUM UI) */}
+  return (
+    <main
+      className="min-h-screen relative"
+      style={{ background: BG, color: TEXT_PRIMARY }}
+    >
+      {/* Ambient glow — subtle, not cyber */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 50% at 20% 0%, rgba(200,168,107,0.04) 0%, transparent 70%), radial-gradient(ellipse 40% 40% at 80% 100%, rgba(232,115,90,0.03) 0%, transparent 70%)",
+        }}
+      />
+
+      {/* ─── Toast ──────────────────────────────────────────────────────────── */}
       {toast && (
-        <div className="fixed bottom-8 right-8 z-[100] flex items-center gap-4 px-6 py-4 rounded-2xl bg-[#0f172a]/90 backdrop-blur-2xl border border-white/10 shadow-[0_15px_40px_rgba(0,0,0,0.6)] animate-[pulse_0.3s_ease-out]">
+        <div
+          className="fixed bottom-6 right-6 z-100 flex items-center gap-3.5 px-5 py-3.5 rounded-2xl"
+          style={{
+            background: "rgba(12,10,8,0.95)",
+            border: `1px solid ${toast.type === "success" ? "rgba(200,168,107,0.2)" : "rgba(232,115,90,0.2)"}`,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+            backdropFilter: "blur(20px)",
+          }}
+        >
           <div
-            className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-xl shadow-inner ${toast.type === "success" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-rose-500/20 text-rose-400 border border-rose-500/30"}`}
+            className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-[12px]"
+            style={{
+              background:
+                toast.type === "success"
+                  ? "rgba(200,168,107,0.1)"
+                  : "rgba(232,115,90,0.1)",
+              color: toast.type === "success" ? GOLD : CORAL,
+              border: `1px solid ${toast.type === "success" ? "rgba(200,168,107,0.2)" : "rgba(232,115,90,0.2)"}`,
+            }}
           >
             {toast.type === "success" ? "✓" : "✕"}
           </div>
           <div>
-            <h4 className="text-white font-bold tracking-wide">
+            <p
+              className="text-[13px] font-semibold"
+              style={{ color: TEXT_PRIMARY }}
+            >
               {toast.title}
-            </h4>
-            <p className="text-slate-400 text-sm">{toast.message}</p>
+            </p>
+            <p className="text-[11px] mt-0.5" style={{ color: TEXT_MUTED }}>
+              {toast.message}
+            </p>
           </div>
         </div>
       )}
 
-      <header className="w-full max-w-7xl mx-auto flex justify-between items-center mb-8 z-10 px-4 py-4 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-neon-cyan/20 flex items-center justify-center border border-neon-cyan/30 text-neon-cyan font-bold">
-            {userEmail.charAt(0).toUpperCase()}
+      <div className="relative z-10 max-w-350 mx-auto px-5 py-5 lg:px-8 lg:py-6">
+        {/* ─── Header ───────────────────────────────────────────────────────── */}
+        <header className="flex justify-between items-center mb-7">
+          <div className="flex items-center gap-4">
+            {/* Logo mark */}
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold"
+              style={{
+                background: `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`,
+                color: "#0a0906",
+              }}
+            >
+              ₹
+            </div>
+            <div>
+              <p
+                className="text-[11px] font-medium"
+                style={{ color: TEXT_MUTED }}
+              >
+                Selamat datang,
+              </p>
+              <p
+                className="text-[13px] font-semibold"
+                style={{ color: TEXT_SECONDARY }}
+              >
+                {userEmail}
+              </p>
+            </div>
           </div>
-          <div className="hidden sm:block">
-            <p className="text-xs text-slate-400">Selamat datang kembali,</p>
-            <p className="text-sm font-semibold text-white">{userEmail}</p>
-          </div>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="px-6 py-2 rounded-xl border border-neon-coral/30 text-neon-coral hover:bg-neon-coral/10 text-sm font-medium"
-        >
-          Keluar
-        </button>
-      </header>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 rounded-xl text-[12px] font-medium transition-all"
+            style={{
+              color: TEXT_MUTED,
+              background: "rgba(255,255,255,0.03)",
+              border: `1px solid ${BORDER}`,
+            }}
+          >
+            Keluar
+          </button>
+        </header>
 
-      <div className="w-full max-w-7xl mx-auto flex flex-col lg:flex-row gap-8 items-start">
-        <section className="w-full lg:w-1/3 z-10 sticky top-8 flex flex-col gap-6">
-          <div className="p-8 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl">
-            <h1 className="text-3xl font-bold mb-2 text-white">
-              Finance<span className="text-neon-cyan">Tracker.</span>
-            </h1>
-            <p className="text-slate-400 mb-8 text-sm">
-              Peta arus kas harianmu.
-            </p>
-            <div className="space-y-6">
-              <div className="p-6 rounded-2xl bg-white/5 border border-white/5">
-                <p className="text-sm text-slate-400 mb-1">
-                  Total Saldo Terkonsolidasi
-                </p>
-                <h2 className="text-4xl font-semibold text-white">
-                  {formatRupiah(totalBalance)}
-                </h2>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center px-1">
-                  <p className="text-xs font-semibold text-slate-400 uppercase">
-                    Daftar Akun
-                  </p>
-                  <button
-                    onClick={() => setIsAccountModalOpen(true)}
-                    className="text-xs font-medium text-neon-cyan"
-                  >
-                    + Tambah
-                  </button>
-                </div>
+        <div className="flex flex-col lg:flex-row gap-5 items-start">
+          {/* ═══════════════════════════════════════════════════════════════════
+              LEFT COLUMN
+          ═══════════════════════════════════════════════════════════════════ */}
+          <aside className="w-full lg:w-[320px] shrink-0 flex flex-col gap-4 lg:sticky lg:top-6">
+            {/* Balance card */}
+            <Card className="p-6" style={{ background: SURFACE }}>
+              <p
+                className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-1.5"
+                style={{ color: TEXT_MUTED }}
+              >
+                Total Saldo
+              </p>
+              <h2
+                className="text-3xl font-bold tracking-tight mb-0.5 tabular-nums"
+                style={{ color: TEXT_PRIMARY }}
+              >
+                {formatRupiah(totalBalance)}
+              </h2>
+              <p className="text-[11px]" style={{ color: TEXT_MUTED }}>
+                {accounts.length} rekening terkonsolidasi
+              </p>
+
+              <div className="mt-5 space-y-1.5">
                 {accounts.map((acc) => (
                   <div
                     key={acc.id}
-                    className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5"
+                    className="flex justify-between items-center px-3.5 py-2.5 rounded-xl transition-colors"
+                    style={{
+                      background: "rgba(255,255,255,0.02)",
+                      border: `1px solid ${BORDER}`,
+                    }}
                   >
-                    <div>
-                      <p className="text-sm font-medium text-white">
-                        {acc.name}
-                      </p>
-                      <p className="text-xs text-slate-400 capitalize">
-                        {acc.type}
-                      </p>
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ background: GOLD_MUTED }}
+                      />
+                      <div>
+                        <p
+                          className="text-[12px] font-medium"
+                          style={{ color: TEXT_PRIMARY }}
+                        >
+                          {acc.name}
+                        </p>
+                        <p
+                          className="text-[10px]"
+                          style={{ color: TEXT_MUTED }}
+                        >
+                          {typeLabel[acc.type] || acc.type}
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-sm font-semibold text-slate-200">
+                    <p
+                      className="text-[12px] font-semibold tabular-nums"
+                      style={{ color: TEXT_SECONDARY }}
+                    >
                       {formatRupiah(acc.current_balance)}
                     </p>
                   </div>
                 ))}
               </div>
-              <button
-                onClick={() => setIsTxModalOpen(true)}
-                className="w-full py-4 rounded-2xl bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 font-medium pt-4 shadow-[0_0_15px_rgba(34,211,238,0.2)] hover:shadow-[0_0_25px_rgba(34,211,238,0.4)] transition-all"
-              >
-                + Catat Transaksi
-              </button>
-            </div>
-          </div>
-          <div className="p-8 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl">
-            <h2 className="text-lg font-bold text-white mb-6">
-              Radar Tagihan Berulang
-            </h2>
-            <SubscriptionRadar subscriptions={subscriptions} />
-          </div>
-        </section>
 
-        <section className="w-full lg:w-2/3 flex flex-col gap-8 z-10">
-          <div className="p-8 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl">
-            <h2 className="text-xl font-bold text-white mb-6">
-              Analisis Pengeluaran
-            </h2>
-            <ExpenseChart transactions={transactions} />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="p-8 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl">
-              <h2 className="text-lg font-bold text-white mb-6">
-                Batas Anggaran
-              </h2>
-              <BudgetProgress budgets={budgets} transactions={transactions} />
-            </div>
-            <div className="p-8 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl">
-              <h2 className="text-lg font-bold text-white mb-6">
-                Target Finansial
-              </h2>
-              <FinancialGoals
-                goals={goals}
-                onOpenTopUp={(id, name) => {
-                  setSelectedGoalId(id);
-                  setSelectedGoalName(name);
-                  setIsGoalModalOpen(true);
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="p-8 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl flex-1 flex flex-col min-h-100">
-            <h2 className="text-xl font-bold text-white mb-8">
-              Riwayat Pergerakan Kas
-            </h2>
-            {historyItems.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center opacity-60">
-                <p className="text-slate-300">Belum ada pergerakan kas</p>
-              </div>
-            ) : (
-              <div className="space-y-4 overflow-y-auto pr-2">
-                {historyItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center border ${item.type === "income" ? "bg-neon-cyan/10 border-neon-cyan/20 text-neon-cyan" : item.type === "expense" ? "bg-neon-coral/10 border-neon-coral/20 text-neon-coral" : "bg-[#818cf8]/10 border-[#818cf8]/20 text-[#818cf8]"}`}
-                      >
-                        {item.type === "income"
-                          ? "↓"
-                          : item.type === "expense"
-                            ? "↑"
-                            : "⇄"}
-                      </div>
-                      <div>
-                        <p className="text-white font-medium">
-                          {item.description}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">
-                          {item.accountName} •{" "}
-                          {new Date(item.created_at).toLocaleDateString(
-                            "id-ID",
-                            { day: "numeric", month: "short" },
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <p
-                      className={`font-semibold ${item.type === "income" ? "text-neon-cyan" : item.type === "expense" ? "text-neon-coral" : "text-[#818cf8]"}`}
-                    >
-                      {item.type === "income"
-                        ? "+"
-                        : item.type === "expense"
-                          ? "-"
-                          : ""}
-                      {formatRupiah(item.amount)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
-
-      {isGoalModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-chill-bg border border-white/10 rounded-3xl p-8 shadow-2xl relative">
-            <button
-              onClick={() => setIsGoalModalOpen(false)}
-              className="absolute top-6 right-6 text-slate-400 hover:text-white"
-            >
-              ✕
-            </button>
-            <h2 className="text-2xl font-bold text-white mb-2">
-              Isi Saldo Target
-            </h2>
-            <p className="text-indigo-400 font-medium mb-6">
-              {selectedGoalName}
-            </p>
-            <form onSubmit={handleTopUpGoal} className="space-y-5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase">
-                  Ambil dari Dompet
-                </label>
-                <select
-                  required
-                  value={txAccountId}
-                  onChange={(e) => setTxAccountId(e.target.value)}
-                  className="w-full bg-chill-bg border border-white/10 rounded-xl px-4 py-3 text-white"
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => setIsAccountModalOpen(true)}
+                  className="flex-1 py-2.5 rounded-xl text-[11px] font-semibold uppercase tracking-widest transition-all"
+                  style={{
+                    color: TEXT_MUTED,
+                    background: "rgba(255,255,255,0.03)",
+                    border: `1px solid ${BORDER}`,
+                  }}
                 >
-                  <option value="" disabled>
-                    Pilih sumber dana...
-                  </option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({formatRupiah(a.current_balance)})
-                    </option>
-                  ))}
-                </select>
+                  + Rekening
+                </button>
+                <button
+                  onClick={() => setIsTxModalOpen(true)}
+                  className="flex-2 py-2.5 rounded-xl text-[12px] font-semibold transition-all"
+                  style={{
+                    background: `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`,
+                    color: "#0a0906",
+                  }}
+                >
+                  Catat Transaksi
+                </button>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase">
-                  Nominal Disisihkan (Rp)
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  value={goalTopUpAmount}
-                  onChange={(e) => setGoalTopUpAmount(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
-                  placeholder="Misal: 50000"
+            </Card>
+
+            {/* Subscription radar */}
+            <Card className="p-5">
+              <SectionHeading>Tagihan Berulang</SectionHeading>
+              <SubscriptionRadar subscriptions={subscriptions} />
+            </Card>
+          </aside>
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              RIGHT COLUMN
+          ═══════════════════════════════════════════════════════════════════ */}
+          <div className="flex-1 flex flex-col gap-4 min-w-0">
+            {/* Expense chart */}
+            <Card className="p-6">
+              <SectionHeading>Distribusi Pengeluaran</SectionHeading>
+              <ExpenseChart transactions={transactions} />
+            </Card>
+
+            {/* Budget + Goals */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card className="p-6">
+                <SectionHeading>Batas Anggaran</SectionHeading>
+                <BudgetProgress budgets={budgets} transactions={transactions} />
+              </Card>
+              <Card className="p-6">
+                <SectionHeading>Target Finansial</SectionHeading>
+                <FinancialGoals
+                  goals={goals}
+                  onOpenTopUp={(id, name) => {
+                    setSelectedGoalId(id);
+                    setSelectedGoalName(name);
+                    setIsGoalModalOpen(true);
+                  }}
                 />
-              </div>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-4 rounded-xl font-bold mt-4 bg-indigo-500 text-white hover:bg-indigo-400 disabled:opacity-50"
-              >
-                {isSubmitting ? "Memproses..." : "Tambahkan ke Tabungan"}
-              </button>
-            </form>
+              </Card>
+            </div>
+
+            {/* Transaction history */}
+            <Card className="p-6 flex flex-col" style={{ minHeight: "320px" }}>
+              <SectionHeading>Riwayat Pergerakan Kas</SectionHeading>
+
+              {historyItems.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-[13px]" style={{ color: TEXT_MUTED }}>
+                    Belum ada pergerakan kas.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-1.5 overflow-y-auto">
+                  {historyItems.map((item) => {
+                    const isIncome = item.type === "income";
+                    const isTransfer = item.type === "transfer";
+                    const dotColor = isIncome
+                      ? GOLD
+                      : isTransfer
+                        ? "#a89880"
+                        : CORAL;
+                    const amountColor = isIncome
+                      ? GOLD
+                      : isTransfer
+                        ? TEXT_SECONDARY
+                        : CORAL;
+                    const icon = isIncome ? "↓" : isTransfer ? "⇄" : "↑";
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between px-4 py-3 rounded-xl transition-all"
+                        style={{
+                          background: "rgba(255,255,255,0.015)",
+                          border: `1px solid transparent`,
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLDivElement).style.background =
+                            "rgba(255,255,255,0.03)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLDivElement).style.background =
+                            "rgba(255,255,255,0.015)";
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Type indicator */}
+                          <div
+                            className="w-8 h-8 rounded-xl flex items-center justify-center text-[12px] font-bold shrink-0"
+                            style={{
+                              background: `${dotColor}10`,
+                              color: dotColor,
+                              border: `1px solid ${dotColor}20`,
+                            }}
+                          >
+                            {icon}
+                          </div>
+                          <div>
+                            <p
+                              className="text-[13px] font-medium"
+                              style={{ color: TEXT_PRIMARY }}
+                            >
+                              {item.description}
+                            </p>
+                            <p
+                              className="text-[11px] mt-0.5"
+                              style={{ color: TEXT_MUTED }}
+                            >
+                              {item.accountName}
+                              {" · "}
+                              {new Date(item.created_at).toLocaleDateString(
+                                "id-ID",
+                                {
+                                  day: "numeric",
+                                  month: "short",
+                                },
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <p
+                          className="text-[13px] font-semibold tabular-nums shrink-0 ml-4"
+                          style={{ color: amountColor }}
+                        >
+                          {isIncome ? "+" : isTransfer ? "" : "−"}
+                          {formatRupiah(item.amount)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
           </div>
         </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          GOAL TOP-UP MODAL
+      ═══════════════════════════════════════════════════════════════════════ */}
+      {isGoalModalOpen && (
+        <Modal onClose={() => setIsGoalModalOpen(false)}>
+          <div className="mb-6">
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2"
+              style={{ color: GOLD }}
+            >
+              Isi Saldo Target
+            </p>
+            <h2 className="text-xl font-bold" style={{ color: TEXT_PRIMARY }}>
+              {selectedGoalName}
+            </h2>
+          </div>
+          <form onSubmit={handleTopUpGoal} className="space-y-4">
+            <div>
+              <FieldLabel>Ambil dari Dompet</FieldLabel>
+              <GoldSelect
+                required
+                value={txAccountId}
+                onChange={(e) => setTxAccountId(e.target.value)}
+              >
+                <option value="" disabled>
+                  Pilih sumber dana...
+                </option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({formatRupiah(a.current_balance)})
+                  </option>
+                ))}
+              </GoldSelect>
+            </div>
+            <div>
+              <FieldLabel>Nominal Disisihkan (Rp)</FieldLabel>
+              <GoldInput
+                type="number"
+                required
+                min="1"
+                value={goalTopUpAmount}
+                onChange={(e) => setGoalTopUpAmount(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-3.5 rounded-xl text-[13px] font-semibold mt-2 transition-all"
+              style={{
+                background: `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`,
+                color: "#0a0906",
+                opacity: isSubmitting ? 0.6 : 1,
+              }}
+            >
+              {isSubmitting ? "Memproses..." : "Tambahkan ke Tabungan"}
+            </button>
+          </form>
+        </Modal>
       )}
 
+      {/* ═══════════════════════════════════════════════════════════════════════
+          TRANSACTION MODAL
+      ═══════════════════════════════════════════════════════════════════════ */}
       {isTxModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-chill-bg border border-white/10 rounded-3xl p-8 shadow-2xl relative">
-            <button
-              onClick={() => setIsTxModalOpen(false)}
-              className="absolute top-6 right-6 text-slate-400 hover:text-white"
+        <Modal onClose={() => setIsTxModalOpen(false)}>
+          <div className="mb-6">
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2"
+              style={{ color: GOLD }}
             >
-              ✕
-            </button>
-            <h2 className="text-2xl font-bold text-white mb-6">
               Catat Transaksi
+            </p>
+            <h2 className="text-xl font-bold" style={{ color: TEXT_PRIMARY }}>
+              Tambah Baru
             </h2>
+          </div>
 
-            <div className="flex gap-3 mb-5">
-              <label className="flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-xl bg-linear-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/30 text-emerald-400 font-medium cursor-pointer hover:bg-emerald-500/20 transition-all shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+          {/* AI Scan buttons */}
+          <div className="grid grid-cols-2 gap-2 mb-5">
+            {(["camera", "gallery"] as const).map((mode) => (
+              <label
+                key={mode}
+                className="flex flex-col items-center justify-center gap-1 py-3 rounded-xl cursor-pointer transition-all"
+                style={{
+                  background: "rgba(255,255,255,0.02)",
+                  border: `1px solid rgba(255,255,255,0.07)`,
+                  color: TEXT_MUTED,
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLLabelElement).style.borderColor =
+                    "rgba(200,168,107,0.2)";
+                  (e.currentTarget as HTMLLabelElement).style.color = GOLD;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLLabelElement).style.borderColor =
+                    "rgba(255,255,255,0.07)";
+                  (e.currentTarget as HTMLLabelElement).style.color =
+                    TEXT_MUTED;
+                }}
+              >
                 {isScanning ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mb-1"></div>
-                    <span className="text-[10px]">Memproses...</span>
+                    <div
+                      className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin mb-1"
+                      style={{
+                        borderColor: `${GOLD} transparent ${GOLD} ${GOLD}`,
+                      }}
+                    />
+                    <span className="text-[9px] uppercase tracking-widest">
+                      Memproses...
+                    </span>
                   </>
                 ) : (
                   <>
-                    <span className="text-xl mb-1">📷</span>
-                    <span className="text-xs uppercase tracking-wider font-bold">
-                      Kamera
+                    <span className="text-lg">
+                      {mode === "camera" ? "📷" : "📁"}
+                    </span>
+                    <span className="text-[9px] font-semibold uppercase tracking-widest">
+                      {mode === "camera" ? "Kamera" : "Galeri"}
                     </span>
                   </>
                 )}
                 <input
                   type="file"
                   accept="image/*"
-                  capture="environment"
+                  {...(mode === "camera" ? { capture: "environment" } : {})}
                   className="hidden"
                   onChange={handleScanReceipt}
                   disabled={isScanning}
                 />
               </label>
+            ))}
+          </div>
 
-              <label className="flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-xl bg-linear-to-r from-teal-500/10 to-cyan-500/10 border border-teal-500/30 text-teal-400 font-medium cursor-pointer hover:bg-teal-500/20 transition-all shadow-[0_0_15px_rgba(20,184,166,0.15)]">
-                {isScanning ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-teal-400 border-t-transparent rounded-full animate-spin mb-1"></div>
-                    <span className="text-[10px]">Memproses...</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xl mb-1">📁</span>
-                    <span className="text-xs uppercase tracking-wider font-bold">
-                      Galeri
-                    </span>
-                  </>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleScanReceipt}
-                  disabled={isScanning}
-                />
-              </label>
+          <form onSubmit={handleAddTransaction} className="space-y-4">
+            {/* Type selector */}
+            <div
+              className="flex p-0.5 rounded-xl"
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                border: `1px solid ${BORDER}`,
+              }}
+            >
+              {(["expense", "income", "transfer"] as const).map((t) => {
+                const cfg = txTypeConfig[t];
+                const active = txType === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => {
+                      setTxType(t);
+                      setTxCategoryId("");
+                      setTxDestinationAccountId("");
+                    }}
+                    className="flex-1 py-2 text-[11px] font-semibold rounded-xl transition-all"
+                    style={{
+                      background: active ? cfg.bg : "transparent",
+                      color: active ? cfg.color : TEXT_MUTED,
+                      border: active
+                        ? `1px solid ${cfg.color}30`
+                        : "1px solid transparent",
+                    }}
+                  >
+                    {cfg.label}
+                  </button>
+                );
+              })}
             </div>
 
-            <form onSubmit={handleAddTransaction} className="space-y-5">
-              <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTxType("expense");
-                    setTxCategoryId("");
-                    setTxDestinationAccountId("");
-                  }}
-                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${txType === "expense" ? "bg-neon-coral text-white" : "text-slate-400"}`}
-                >
-                  Pengeluaran
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTxType("income");
-                    setTxCategoryId("");
-                    setTxDestinationAccountId("");
-                  }}
-                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${txType === "income" ? "bg-neon-cyan text-chill-bg" : "text-slate-400"}`}
-                >
-                  Pemasukan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTxType("transfer");
-                    setTxCategoryId("");
-                  }}
-                  className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${txType === "transfer" ? "bg-[#818cf8] text-white" : "text-slate-400"}`}
-                >
-                  Transfer
-                </button>
-              </div>
+            <div>
+              <FieldLabel>
+                {txType === "transfer" ? "Dari Dompet" : "Pilih Dompet"}
+              </FieldLabel>
+              <GoldSelect
+                required
+                value={txAccountId}
+                onChange={(e) => setTxAccountId(e.target.value)}
+              >
+                <option value="" disabled>
+                  Pilih dompet...
+                </option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </GoldSelect>
+            </div>
+
+            {txType === "transfer" ? (
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2">
-                  {txType === "transfer" ? "Dari Dompet" : "Pilih Dompet"}
-                </label>
-                <select
+                <FieldLabel>Ke Dompet</FieldLabel>
+                <GoldSelect
                   required
-                  value={txAccountId}
-                  onChange={(e) => setTxAccountId(e.target.value)}
-                  className="w-full bg-chill-bg border border-white/10 rounded-xl px-4 py-3 text-white"
+                  value={txDestinationAccountId}
+                  onChange={(e) => setTxDestinationAccountId(e.target.value)}
                 >
                   <option value="" disabled>
-                    Pilih dompet...
+                    Pilih tujuan...
                   </option>
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.name}
                     </option>
                   ))}
-                </select>
+                </GoldSelect>
               </div>
-              {txType === "transfer" ? (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-2">
-                    Ke Dompet
-                  </label>
-                  <select
-                    required
-                    value={txDestinationAccountId}
-                    onChange={(e) => setTxDestinationAccountId(e.target.value)}
-                    className="w-full bg-chill-bg border border-white/10 rounded-xl px-4 py-3 text-white"
-                  >
-                    <option value="" disabled>
-                      Pilih dompet...
-                    </option>
-                    {accounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-2">
-                    Kategori
-                  </label>
-                  <select
-                    required
-                    value={txCategoryId}
-                    onChange={(e) => setTxCategoryId(e.target.value)}
-                    className="w-full bg-chill-bg border border-white/10 rounded-xl px-4 py-3 text-white"
-                  >
-                    <option value="" disabled>
-                      Pilih kategori...
-                    </option>
-                    {filteredCategories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+            ) : (
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2">
-                  Nominal (Rp)
-                </label>
-                <input
-                  type="number"
+                <FieldLabel>Kategori</FieldLabel>
+                <GoldSelect
                   required
-                  min="1"
-                  value={txAmount}
-                  onChange={(e) => setTxAmount(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
-                  placeholder="0"
-                />
+                  value={txCategoryId}
+                  onChange={(e) => setTxCategoryId(e.target.value)}
+                >
+                  <option value="" disabled>
+                    Pilih kategori...
+                  </option>
+                  {filteredCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </GoldSelect>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2">
-                  Catatan
-                </label>
-                <input
-                  type="text"
-                  value={txDesc}
-                  onChange={(e) => setTxDesc(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className={`w-full py-4 rounded-xl font-bold mt-4 ${txType === "income" ? "bg-neon-cyan text-chill-bg" : txType === "expense" ? "bg-neon-coral text-white" : "bg-[#818cf8] text-white"} disabled:opacity-50`}
-              >
-                {isSubmitting ? "Menyimpan..." : "Simpan"}
-              </button>
-            </form>
-          </div>
-        </div>
+            )}
+
+            <div>
+              <FieldLabel>Nominal (Rp)</FieldLabel>
+              <GoldInput
+                type="number"
+                required
+                min="1"
+                value={txAmount}
+                onChange={(e) => setTxAmount(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+
+            <div>
+              <FieldLabel>Catatan</FieldLabel>
+              <GoldInput
+                type="text"
+                value={txDesc}
+                onChange={(e) => setTxDesc(e.target.value)}
+                placeholder="Opsional..."
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-3.5 rounded-xl text-[13px] font-semibold transition-all"
+              style={{
+                background:
+                  txType === "income"
+                    ? `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`
+                    : txType === "expense"
+                      ? `linear-gradient(135deg, #a03520, ${CORAL})`
+                      : "linear-gradient(135deg, #5a5248, #a89880)",
+                color: txType === "income" ? "#0a0906" : "#fff",
+                opacity: isSubmitting ? 0.6 : 1,
+              }}
+            >
+              {isSubmitting ? "Menyimpan..." : "Simpan"}
+            </button>
+          </form>
+        </Modal>
       )}
 
+      {/* ═══════════════════════════════════════════════════════════════════════
+          ADD ACCOUNT MODAL
+      ═══════════════════════════════════════════════════════════════════════ */}
       {isAccountModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-chill-bg border border-white/10 rounded-3xl p-8 shadow-2xl relative">
-            <button
-              onClick={() => setIsAccountModalOpen(false)}
-              className="absolute top-6 right-6 text-slate-400"
+        <Modal onClose={() => setIsAccountModalOpen(false)}>
+          <div className="mb-6">
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2"
+              style={{ color: GOLD }}
             >
-              ✕
-            </button>
-            <h2 className="text-2xl font-bold text-white mb-6">
-              Tambah Rekening Baru
+              Kelola Dompet
+            </p>
+            <h2 className="text-xl font-bold" style={{ color: TEXT_PRIMARY }}>
+              Rekening Baru
             </h2>
-            <form onSubmit={handleAddAccount} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2">
-                  Nama Rekening
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2">
-                  Tipe
-                </label>
-                <select
-                  value={newType}
-                  onChange={(e) => setNewType(e.target.value)}
-                  className="w-full bg-chill-bg border border-white/10 rounded-xl px-4 py-3 text-white"
-                >
-                  <option value="debit">Debit / Bank</option>
-                  <option value="e-wallet">E-Wallet</option>
-                  <option value="cash">Tunai</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2">
-                  Saldo Awal
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="0"
-                  value={newBalance}
-                  onChange={(e) => setNewBalance(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-4 rounded-xl bg-neon-cyan text-chill-bg font-bold mt-4 disabled:opacity-50"
-              >
-                {isSubmitting ? "Menyimpan..." : "Simpan Rekening"}
-              </button>
-            </form>
           </div>
-        </div>
+          <form onSubmit={handleAddAccount} className="space-y-4">
+            <div>
+              <FieldLabel>Nama Rekening</FieldLabel>
+              <GoldInput
+                type="text"
+                required
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="cth. Mandiri Utama"
+              />
+            </div>
+            <div>
+              <FieldLabel>Tipe</FieldLabel>
+              <GoldSelect
+                value={newType}
+                onChange={(e) => setNewType(e.target.value)}
+              >
+                <option value="debit">Debit / Bank</option>
+                <option value="e-wallet">E-Wallet</option>
+                <option value="cash">Tunai</option>
+              </GoldSelect>
+            </div>
+            <div>
+              <FieldLabel>Saldo Awal</FieldLabel>
+              <GoldInput
+                type="number"
+                required
+                min="0"
+                value={newBalance}
+                onChange={(e) => setNewBalance(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-3.5 rounded-xl text-[13px] font-semibold mt-2 transition-all"
+              style={{
+                background: `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`,
+                color: "#0a0906",
+                opacity: isSubmitting ? 0.6 : 1,
+              }}
+            >
+              {isSubmitting ? "Menyimpan..." : "Simpan Rekening"}
+            </button>
+          </form>
+        </Modal>
       )}
     </main>
   );

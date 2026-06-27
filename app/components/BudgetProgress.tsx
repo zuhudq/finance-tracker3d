@@ -36,8 +36,8 @@ export default function BudgetProgress({
 
   if (budgets.length === 0) {
     return (
-      <div className="p-6 text-center border border-dashed border-white/10 rounded-2xl bg-white/5">
-        <p className="text-sm text-slate-500 italic">
+      <div className="py-10 text-center border border-dashed border-[#2a2520] rounded-2xl">
+        <p className="text-[13px] text-[#5a5248] italic">
           Belum ada batas anggaran yang diatur bulan ini.
         </p>
       </div>
@@ -45,7 +45,7 @@ export default function BudgetProgress({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {budgets.map((budget) => {
         const totalSpent = transactions
           .filter(
@@ -60,37 +60,47 @@ export default function BudgetProgress({
           100,
         );
         const isUrgent = percentUsed >= 80;
-        const barColor = isUrgent ? "bg-neon-coral" : "bg-neon-cyan";
-        const textColor = isUrgent ? "text-neon-coral" : "text-neon-cyan";
 
         return (
-          <div key={budget.id} className="space-y-2">
-            <div className="flex justify-between items-end text-sm">
+          <div key={budget.id} className="group">
+            <div className="flex justify-between items-end mb-2.5">
               <div>
-                <p className="text-white font-medium">
+                <p className="text-[13px] font-semibold text-[#e8ddd0] tracking-wide">
                   {budget.categories?.name || "Kategori"}
                 </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Terpakai:{" "}
-                  <span className="font-semibold text-slate-200">
+                <p className="text-[11px] text-[#6b6058] mt-0.5">
+                  Terpakai{" "}
+                  <span className="text-[#a89880] font-medium">
                     {formatRupiah(totalSpent)}
                   </span>
                 </p>
               </div>
               <div className="text-right">
-                <p className={`text-xs font-bold ${textColor}`}>
+                <p
+                  className={`text-xs font-bold tabular-nums ${isUrgent ? "text-[#e8735a]" : "text-[#c8a86b]"}`}
+                >
                   {percentUsed}%
                 </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Batas: {formatRupiah(budget.amount_limit)}
+                <p className="text-[11px] text-[#6b6058] mt-0.5">
+                  dari {formatRupiah(budget.amount_limit)}
                 </p>
               </div>
             </div>
-            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden border border-white/5 relative">
+
+            {/* Track */}
+            <div className="relative h-0.75 bg-[#1e1c18] rounded-full overflow-hidden">
               <div
-                className={`h-full ${barColor} rounded-full transition-all duration-500`}
-                style={{ width: `${percentUsed}%` }}
-              ></div>
+                className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
+                style={{
+                  width: `${percentUsed}%`,
+                  background: isUrgent
+                    ? "linear-gradient(90deg, #c0422a, #e8735a)"
+                    : "linear-gradient(90deg, #8a6a30, #c8a86b)",
+                  boxShadow: isUrgent
+                    ? "0 0 8px rgba(232,115,90,0.5)"
+                    : "0 0 8px rgba(200,168,107,0.4)",
+                }}
+              />
             </div>
           </div>
         );
