@@ -68,6 +68,13 @@ interface HistoryItem {
   categoryName: string;
 }
 
+// STRUKTUR DATA TOAST (POP-UP)
+interface ToastMessage {
+  title: string;
+  message: string;
+  type: "success" | "error";
+}
+
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -90,7 +97,6 @@ export default function DashboardPage() {
 
   const [isTxModalOpen, setIsTxModalOpen] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-
   const [isScanning, setIsScanning] = useState<boolean>(false);
 
   const [txType, setTxType] = useState<string>("expense");
@@ -105,6 +111,19 @@ export default function DashboardPage() {
   const [selectedGoalId, setSelectedGoalId] = useState<string>("");
   const [selectedGoalName, setSelectedGoalName] = useState<string>("");
   const [goalTopUpAmount, setGoalTopUpAmount] = useState<string>("");
+
+  // STATE BARU: Notifikasi Pop-up (Toast)
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+
+  // FUNGSI BARU: Pemicu Pop-up yang akan hilang otomatis dalam 3.5 detik
+  const showToast = (
+    title: string,
+    message: string,
+    type: "success" | "error" = "success",
+  ) => {
+    setToast({ title, message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -221,49 +240,124 @@ export default function DashboardPage() {
     router.push("/");
   };
 
-  const fileToBase64 = (
+  const compressImage = (
     file: File,
   ): Promise<{ base64: string; mimeType: string }> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          const [metadata, base64Data] = reader.result.split(",");
-          const mimeType = metadata.match(/:(.*?);/)?.[1] || "image/jpeg";
-          resolve({ base64: base64Data, mimeType });
-        }
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 800;
+          const scaleSize = MAX_WIDTH / img.width;
+          canvas.width = MAX_WIDTH;
+          canvas.height = img.height * scaleSize;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const base64Data = canvas.toDataURL("image/jpeg", 0.7);
+          const base64String = base64Data.split(",")[1];
+          resolve({ base64: base64String, mimeType: "image/jpeg" });
+        };
       };
       reader.onerror = (error) => reject(error);
     });
   };
 
+  // LOGIKA BARU: AI SCANNER DENGAN AUTO-SAVE
   const handleScanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsScanning(true);
     try {
-      const { base64, mimeType } = await fileToBase64(file);
-
+      const { base64, mimeType } = await compressImage(file);
       const response = await fetch("/api/scan-receipt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageBase64: base64, mimeType }),
       });
 
-      if (!response.ok) throw new Error("Gagal memindai struk");
-
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Gagal memindai struk");
 
-      if (data.amount) setTxAmount(data.amount.toString());
-      if (data.description) setTxDesc(data.description);
-      setTxType("expense");
-    } catch (error) {
+      if (data.amount && data.amount > 0) {
+        // PERSIAPAN AUTO-SAVE
+        const finalAmount = Number(data.amount);
+        const finalDesc = data.description || "Auto-scan Transaksi";
+
+        // Pilih dompet aktif, atau dompet pertama jika belum ada yang terpilih
+        const finalAccId =
+          txAccountId || (accounts.length > 0 ? accounts[0].id : "");
+
+        // Pilih kategori aktif, atau pilih kategori pengeluaran pertama secara otomatis
+        const expenseCategories = categories.filter(
+          (c) => c.type === "expense",
+        );
+        const finalCatId =
+          txCategoryId ||
+          (expenseCategories.length > 0 ? expenseCategories[0].id : "");
+
+        if (!finalAccId || !finalCatId) {
+          showToast(
+            "Data Tidak Lengkap",
+            "Buat dompet & kategori terlebih dahulu.",
+            "error",
+          );
+          return;
+        }
+
+        // EKSEKUSI SIMPAN OTOMATIS KE DATABASE
+        const { error: txError } = await supabase.from("transactions").insert([
+          {
+            account_id: finalAccId,
+            category_id: finalCatId,
+            amount: finalAmount,
+            description: finalDesc,
+          },
+        ]);
+
+        if (txError) throw txError;
+
+        // EKSEKUSI POTONG SALDO OTOMATIS
+        const selectedAccount = accounts.find((a) => a.id === finalAccId);
+        if (selectedAccount) {
+          const newBalance =
+            Number(selectedAccount.current_balance) - finalAmount;
+          await supabase
+            .from("accounts")
+            .update({ current_balance: newBalance })
+            .eq("id", finalAccId);
+        }
+
+        // BERSIHKAN FORM & TUTUP MODAL
+        setTxAmount("");
+        setTxDesc("");
+        setIsTxModalOpen(false);
+        await fetchData();
+
+        // TAMPILKAN POP-UP PREMIUM
+        showToast(
+          "Ajaib! 🪄",
+          "Struk dipindai & disimpan otomatis.",
+          "success",
+        );
+      } else {
+        showToast(
+          "Gagal Membaca",
+          "Struk tidak dikenali atau nominal kosong.",
+          "error",
+        );
+      }
+    } catch (error: unknown) {
       console.error(error);
-      alert(
-        "AI kesulitan membaca struk ini. Coba gunakan foto yang lebih terang.",
-      );
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Terjadi kesalahan tidak dikenal";
+      showToast("Error Sistem", errorMessage, "error");
     } finally {
       setIsScanning(false);
       e.target.value = "";
@@ -276,14 +370,14 @@ export default function DashboardPage() {
     try {
       const numericAmount = Number(goalTopUpAmount);
       if (!txAccountId) {
-        alert("Pilih dompet sumber dana!");
+        showToast("Peringatan", "Pilih dompet sumber dana!", "error");
         setIsSubmitting(false);
         return;
       }
       const sourceAcc = accounts.find((a) => a.id === txAccountId);
       if (sourceAcc) {
         if (Number(sourceAcc.current_balance) < numericAmount) {
-          alert("Saldo dompet tidak mencukupi!");
+          showToast("Gagal", "Saldo dompet tidak mencukupi!", "error");
           setIsSubmitting(false);
           return;
         }
@@ -306,9 +400,14 @@ export default function DashboardPage() {
       setGoalTopUpAmount("");
       setIsGoalModalOpen(false);
       await fetchData();
+      showToast(
+        "Target Diperbarui",
+        "Saldo tabungan berhasil diisi.",
+        "success",
+      );
     } catch (error) {
       console.error(error);
-      alert("Gagal mengisi saldo target.");
+      showToast("Gagal", "Sistem gagal mengisi saldo target.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -328,9 +427,10 @@ export default function DashboardPage() {
       setNewBalance("");
       setIsAccountModalOpen(false);
       await fetchData();
+      showToast("Dompet Baru", "Rekening berhasil ditambahkan.", "success");
     } catch (error) {
       console.error(error);
-      alert("Gagal menambahkan akun.");
+      showToast("Gagal", "Sistem gagal menambahkan akun.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -343,12 +443,16 @@ export default function DashboardPage() {
       const numericAmount = Number(txAmount);
       if (txType === "transfer") {
         if (!txAccountId || !txDestinationAccountId) {
-          alert("Pilih dompet asal dan tujuan!");
+          showToast("Peringatan", "Pilih dompet asal dan tujuan!", "error");
           setIsSubmitting(false);
           return;
         }
         if (txAccountId === txDestinationAccountId) {
-          alert("Dompet asal dan tujuan tidak boleh sama!");
+          showToast(
+            "Peringatan",
+            "Dompet asal dan tujuan tidak boleh sama!",
+            "error",
+          );
           setIsSubmitting(false);
           return;
         }
@@ -381,7 +485,7 @@ export default function DashboardPage() {
         }
       } else {
         if (!txAccountId || !txCategoryId) {
-          alert("Pilih dompet dan kategori!");
+          showToast("Peringatan", "Pilih dompet dan kategori!", "error");
           setIsSubmitting(false);
           return;
         }
@@ -412,9 +516,10 @@ export default function DashboardPage() {
       setTxDestinationAccountId("");
       setIsTxModalOpen(false);
       await fetchData();
+      showToast("Berhasil", "Transaksi manual tersimpan.", "success");
     } catch (error) {
       console.error(error);
-      alert("Gagal mencatat data.");
+      showToast("Gagal", "Sistem gagal mencatat data.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -472,8 +577,25 @@ export default function DashboardPage() {
   const filteredCategories = categories.filter((c) => c.type === txType);
 
   return (
-    <main className="min-h-screen p-8 flex flex-col relative bg-chill-bg">
+    <main className="min-h-screen p-8 flex flex-col relative bg-chill-bg overflow-hidden">
       <div className="absolute top-[-10%] left-[-5%] w-100 h-100 rounded-full bg-neon-cyan/5 blur-[120px] pointer-events-none z-0"></div>
+
+      {/* KOMPONEN POP-UP TOAST (PREMIUM UI) */}
+      {toast && (
+        <div className="fixed bottom-8 right-8 z-[100] flex items-center gap-4 px-6 py-4 rounded-2xl bg-[#0f172a]/90 backdrop-blur-2xl border border-white/10 shadow-[0_15px_40px_rgba(0,0,0,0.6)] animate-[pulse_0.3s_ease-out]">
+          <div
+            className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-xl shadow-inner ${toast.type === "success" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-rose-500/20 text-rose-400 border border-rose-500/30"}`}
+          >
+            {toast.type === "success" ? "✓" : "✕"}
+          </div>
+          <div>
+            <h4 className="text-white font-bold tracking-wide">
+              {toast.title}
+            </h4>
+            <p className="text-slate-400 text-sm">{toast.message}</p>
+          </div>
+        </div>
+      )}
 
       <header className="w-full max-w-7xl mx-auto flex justify-between items-center mb-8 z-10 px-4 py-4 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-lg">
         <div className="flex items-center gap-3">
@@ -719,20 +841,48 @@ export default function DashboardPage() {
               Catat Transaksi
             </h2>
 
-            <div className="mb-5">
-              <label className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-linear-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/30 text-emerald-400 font-medium cursor-pointer hover:bg-emerald-500/20 transition-all shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+            <div className="flex gap-3 mb-5">
+              <label className="flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-xl bg-linear-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/30 text-emerald-400 font-medium cursor-pointer hover:bg-emerald-500/20 transition-all shadow-[0_0_15px_rgba(16,185,129,0.15)]">
                 {isScanning ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>{" "}
-                    AI Sedang Membaca...
+                    <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mb-1"></div>
+                    <span className="text-[10px]">Memproses...</span>
                   </>
                 ) : (
-                  <>📷 Auto-Scan Struk AI</>
+                  <>
+                    <span className="text-xl mb-1">📷</span>
+                    <span className="text-xs uppercase tracking-wider font-bold">
+                      Kamera
+                    </span>
+                  </>
                 )}
                 <input
                   type="file"
                   accept="image/*"
                   capture="environment"
+                  className="hidden"
+                  onChange={handleScanReceipt}
+                  disabled={isScanning}
+                />
+              </label>
+
+              <label className="flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-xl bg-linear-to-r from-teal-500/10 to-cyan-500/10 border border-teal-500/30 text-teal-400 font-medium cursor-pointer hover:bg-teal-500/20 transition-all shadow-[0_0_15px_rgba(20,184,166,0.15)]">
+                {isScanning ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-teal-400 border-t-transparent rounded-full animate-spin mb-1"></div>
+                    <span className="text-[10px]">Memproses...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xl mb-1">📁</span>
+                    <span className="text-xs uppercase tracking-wider font-bold">
+                      Galeri
+                    </span>
+                  </>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
                   className="hidden"
                   onChange={handleScanReceipt}
                   disabled={isScanning}

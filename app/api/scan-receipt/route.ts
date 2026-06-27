@@ -1,32 +1,41 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-
 export async function POST(req: Request) {
   try {
-    const { imageBase64, mimeType } = await req.json();
-
-    if (!imageBase64) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
       return NextResponse.json(
-        { error: "Gambar tidak ditemukan" },
+        {
+          error:
+            "Kunci API Gemini tidak ditemukan! Pastikan file .env.local sudah dibuat dan server di-restart.",
+        },
         { status: 400 },
       );
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const { imageBase64, mimeType } = await req.json();
 
-    // Prompt yang lebih cerdas dan tahan banting
+    if (!imageBase64) {
+      return NextResponse.json(
+        { error: "Data gambar kosong saat sampai di server." },
+        { status: 400 },
+      );
+    }
+
+    // PERBAIKAN: Format ID Model ditulis dengan huruf kecil dan tanda strip tanpa spasi
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
     const prompt = `
       Analisis gambar struk, nota, atau tangkapan layar transaksi ini. 
       Cari 2 hal:
       1. amount: Angka total pengeluaran atau total belanja (HANYA angka bulat, hilangkan Rp, titik, atau koma).
       2. description: Nama toko, merchant, atau ringkasan barang yang dibeli (Maksimal 5 kata).
       
-      Jika gambar tidak terlihat seperti struk atau tidak ada angka yang masuk akal, kembalikan amount: 0 dan description: "Tidak dapat dikenali".
+      Kembalikan HANYA format JSON murni.
     `;
 
-    // Konfigurasi rahasia untuk memaksa output HANYA berupa JSON
     const result = await model.generateContent({
       contents: [
         {
@@ -47,16 +56,15 @@ export async function POST(req: Request) {
       },
     });
 
-    // Karena sudah dipaksa jadi JSON, kita tidak perlu repot-repot regex markdown lagi!
     const jsonText = result.response.text();
     const parsedData = JSON.parse(jsonText);
 
     return NextResponse.json(parsedData);
-  } catch (error) {
-    console.error("Gagal memindai struk:", error);
-    return NextResponse.json(
-      { error: "Gagal memproses gambar struk" },
-      { status: 500 },
-    );
+  } catch (error: unknown) {
+    console.error("Gagal memindai struk secara sistem:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Gangguan server tidak dikenal";
+
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
