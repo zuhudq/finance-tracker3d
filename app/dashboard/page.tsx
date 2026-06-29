@@ -47,6 +47,7 @@ export interface Transaction {
   amount: number;
   description: string;
   created_at: string;
+  workspace: string;
   categories: { id?: string; name: string; type: string } | null;
   accounts: { name: string } | null;
 }
@@ -66,6 +67,7 @@ interface HistoryItem {
   type: "income" | "expense" | "transfer" | "goal_topup";
   accountName: string;
   categoryName: string;
+  workspace?: string;
 }
 
 interface ToastMessage {
@@ -85,6 +87,7 @@ const TEXT_PRIMARY = "#e8ddd0";
 const TEXT_SECONDARY = "#a89880";
 const TEXT_MUTED = "#6b6058";
 const CORAL = "#e8735a";
+const EMERALD = "#10b981";
 
 // ─── Input / Select shared className ────────────────────────────────────────
 const inputCls =
@@ -135,7 +138,6 @@ function GoldSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   );
 }
 
-// ─── Label ──────────────────────────────────────────────────────────────────
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <label
@@ -147,7 +149,6 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ─── Section heading ─────────────────────────────────────────────────────────
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2.5 mb-5">
@@ -162,7 +163,6 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ─── Card wrapper ─────────────────────────────────────────────────────────────
 function Card({
   children,
   className = "",
@@ -175,24 +175,21 @@ function Card({
   return (
     <div
       className={`rounded-2xl ${className}`}
-      style={{
-        background: SURFACE,
-        border: `1px solid ${BORDER}`,
-        ...style,
-      }}
+      style={{ background: SURFACE, border: `1px solid ${BORDER}`, ...style }}
     >
       {children}
     </div>
   );
 }
 
-// ─── Modal backdrop ───────────────────────────────────────────────────────────
 function Modal({
   onClose,
   children,
+  maxWidth = "max-w-md",
 }: {
   onClose: () => void;
   children: React.ReactNode;
+  maxWidth?: string;
 }) {
   return (
     <div
@@ -203,7 +200,7 @@ function Modal({
       }}
     >
       <div
-        className="w-full max-w-md rounded-2xl p-7 relative"
+        className={`w-full ${maxWidth} rounded-2xl p-7 relative animate-[fadeIn_0.3s_ease-out]`}
         style={{
           background: "#100e0b",
           border: `1px solid rgba(255,255,255,0.08)`,
@@ -212,7 +209,7 @@ function Modal({
       >
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 w-7 h-7 rounded-full flex items-center justify-center text-[12px] transition-all"
+          className="absolute top-5 right-5 w-7 h-7 rounded-full flex items-center justify-center text-[12px] transition-all hover:bg-white/10"
           style={{
             color: TEXT_MUTED,
             background: "rgba(255,255,255,0.04)",
@@ -227,16 +224,19 @@ function Modal({
   );
 }
 
-// ─── Account type badge ───────────────────────────────────────────────────────
 const typeLabel: Record<string, string> = {
   debit: "Bank",
   "e-wallet": "E-Wallet",
   cash: "Tunai",
 };
 
-// ─── Main page ────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter();
+
+  const [activeWorkspace, setActiveWorkspace] = useState<
+    "personal" | "business"
+  >("personal");
+  const [showBizTutorial, setShowBizTutorial] = useState<boolean>(false);
 
   const [userEmail, setUserEmail] = useState<string>("Memuat...");
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -258,6 +258,14 @@ export default function DashboardPage() {
   const [isTxModalOpen, setIsTxModalOpen] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isScanning, setIsScanning] = useState<boolean>(false);
+
+  // STATE BARU UNTUK AI ADVISOR
+  const [isAiModalOpen, setIsAiModalOpen] = useState<boolean>(false);
+  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
+  const [aiResponse, setAiResponse] = useState<{
+    roast: string;
+    insight: string;
+  } | null>(null);
 
   const [txType, setTxType] = useState<string>("expense");
   const [txAccountId, setTxAccountId] = useState<string>("");
@@ -281,6 +289,21 @@ export default function DashboardPage() {
   ) => {
     setToast({ title, message, type });
     setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleSwitchWorkspace = (mode: "personal" | "business") => {
+    if (mode === "business") {
+      const hasSeenTutorial = localStorage.getItem("hasSeenBizTutorial");
+      if (!hasSeenTutorial) {
+        setShowBizTutorial(true);
+      }
+    }
+    setActiveWorkspace(mode);
+  };
+
+  const closeBizTutorial = () => {
+    localStorage.setItem("hasSeenBizTutorial", "true");
+    setShowBizTutorial(false);
   };
 
   const fetchData = useCallback(async () => {
@@ -331,7 +354,7 @@ export default function DashboardPage() {
       const { data: txData } = await supabase
         .from("transactions")
         .select(
-          `id, amount, description, created_at, categories (id, name, type), accounts (name)`,
+          `id, amount, description, created_at, workspace, categories (id, name, type), accounts (name)`,
         )
         .order("created_at", { ascending: false });
       const { data: tfData } = await supabase
@@ -351,6 +374,7 @@ export default function DashboardPage() {
             type: tx.categories?.type as "income" | "expense",
             accountName: tx.accounts?.name || "Dompet",
             categoryName: tx.categories?.name || "",
+            workspace: tx.workspace || "personal",
           });
         });
       }
@@ -396,6 +420,57 @@ export default function DashboardPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push("/");
+  };
+
+  // FUNGSI BARU UNTUK MENGHUBUNGI AI ADVISOR
+  const handleAskAI = async () => {
+    const activeTransactions = transactions.filter(
+      (tx) => tx.workspace === activeWorkspace,
+    );
+
+    if (activeTransactions.length === 0) {
+      showToast(
+        "Data Kosong",
+        "Belum ada transaksi untuk dianalisis oleh AI.",
+        "error",
+      );
+      return;
+    }
+
+    setIsAiModalOpen(true);
+    setIsAiLoading(true);
+    setAiResponse(null);
+
+    try {
+      // Menyederhanakan data agar ringan dikirim ke Google API
+      const simplifiedTx = activeTransactions.map((tx) => ({
+        amount: tx.amount,
+        desc: tx.description,
+        type: tx.categories?.type,
+        date: new Date(tx.created_at).toLocaleDateString("id-ID"),
+      }));
+
+      const userName = userEmail.split("@")[0]; // Ambil nama depan dari email
+
+      const response = await fetch("/api/ai-advisor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transactions: simplifiedTx, userName }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Gagal menghubungi AI.");
+
+      setAiResponse(data);
+    } catch (error: unknown) {
+      console.error(error);
+      const errorMessage =
+        error instanceof Error ? error.message : "AI sedang error.";
+      showToast("Gagal", errorMessage, "error");
+      setIsAiModalOpen(false);
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   const compressImage = (
@@ -461,14 +536,17 @@ export default function DashboardPage() {
           return;
         }
 
-        const { error: txError } = await supabase.from("transactions").insert([
-          {
-            account_id: finalAccId,
-            category_id: finalCatId,
-            amount: finalAmount,
-            description: finalDesc,
-          },
-        ]);
+        const { error: txError } = await supabase
+          .from("transactions")
+          .insert([
+            {
+              account_id: finalAccId,
+              category_id: finalCatId,
+              amount: finalAmount,
+              description: finalDesc,
+              workspace: activeWorkspace,
+            },
+          ]);
 
         if (txError) throw txError;
 
@@ -602,14 +680,16 @@ export default function DashboardPage() {
           setIsSubmitting(false);
           return;
         }
-        await supabase.from("transfers").insert([
-          {
-            source_account_id: txAccountId,
-            destination_account_id: txDestinationAccountId,
-            amount: numericAmount,
-            description: txDesc || "Transfer Dana",
-          },
-        ]);
+        await supabase
+          .from("transfers")
+          .insert([
+            {
+              source_account_id: txAccountId,
+              destination_account_id: txDestinationAccountId,
+              amount: numericAmount,
+              description: txDesc || "Transfer Dana",
+            },
+          ]);
         const sourceAcc = accounts.find((a) => a.id === txAccountId);
         const destAcc = accounts.find((a) => a.id === txDestinationAccountId);
         if (sourceAcc && destAcc) {
@@ -633,14 +713,17 @@ export default function DashboardPage() {
           setIsSubmitting(false);
           return;
         }
-        await supabase.from("transactions").insert([
-          {
-            account_id: txAccountId,
-            category_id: txCategoryId,
-            amount: numericAmount,
-            description: txDesc,
-          },
-        ]);
+        await supabase
+          .from("transactions")
+          .insert([
+            {
+              account_id: txAccountId,
+              category_id: txCategoryId,
+              amount: numericAmount,
+              description: txDesc,
+              workspace: activeWorkspace,
+            },
+          ]);
         const selectedAccount = accounts.find((a) => a.id === txAccountId);
         if (selectedAccount) {
           const newBal =
@@ -678,7 +761,6 @@ export default function DashboardPage() {
       minimumFractionDigits: 0,
     }).format(value);
 
-  // ─── Loading ───────────────────────────────────────────────────────────────
   if (isLoading)
     return (
       <div
@@ -691,8 +773,6 @@ export default function DashboardPage() {
         />
       </div>
     );
-
-  // ─── Onboarding ────────────────────────────────────────────────────────────
   if (accounts.length === 0) {
     return (
       <main
@@ -760,24 +840,28 @@ export default function DashboardPage() {
     );
   }
 
-  const filteredCategories = categories.filter((c) => c.type === txType);
+  const activeTransactions = transactions.filter(
+    (tx) => tx.workspace === activeWorkspace,
+  );
+  const activeHistoryItems = historyItems.filter(
+    (item) => item.type === "transfer" || item.workspace === activeWorkspace,
+  );
 
-  const txTypeConfig = {
-    expense: { label: "Pengeluaran", color: CORAL, bg: `${CORAL}15` },
-    income: { label: "Pemasukan", color: GOLD, bg: `${GOLD}15` },
-    transfer: {
-      label: "Transfer",
-      color: "#a89880",
-      bg: "rgba(168,152,128,0.1)",
-    },
-  };
+  const bizIncome = activeTransactions
+    .filter((tx) => tx.categories?.type === "income")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const bizExpense = activeTransactions
+    .filter((tx) => tx.categories?.type === "expense")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const netProfit = bizIncome - bizExpense;
+  const profitMargin =
+    bizIncome > 0 ? Math.round((netProfit / bizIncome) * 100) : 0;
 
   return (
     <main
       className="min-h-screen relative"
       style={{ background: BG, color: TEXT_PRIMARY }}
     >
-      {/* Ambient glow — subtle, not cyber */}
       <div
         className="pointer-events-none fixed inset-0 z-0"
         style={{
@@ -786,7 +870,6 @@ export default function DashboardPage() {
         }}
       />
 
-      {/* ─── Toast ──────────────────────────────────────────────────────────── */}
       {toast && (
         <div
           className="fixed bottom-6 right-6 z-100 flex items-center gap-3.5 px-5 py-3.5 rounded-2xl"
@@ -824,11 +907,80 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {showBizTutorial && (
+        <Modal onClose={closeBizTutorial} maxWidth="max-w-lg">
+          <div className="text-center mb-6">
+            <div
+              className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center text-3xl mb-4 shadow-[0_0_30px_rgba(200,168,107,0.2)]"
+              style={{
+                background: `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`,
+              }}
+            >
+              🚀
+            </div>
+            <h2
+              className="text-2xl font-bold tracking-tight mb-2"
+              style={{ color: TEXT_PRIMARY }}
+            >
+              Selamat Datang di Mode Bisnis
+            </h2>
+            <p
+              className="text-[13px] leading-relaxed"
+              style={{ color: TEXT_MUTED }}
+            >
+              Pantau arus kas proyek sampingan atau usahamu secara terpisah.
+              Mulai dari margin profit hingga beban operasional, semuanya
+              terekam jelas.
+            </p>
+          </div>
+          <div className="space-y-4 mb-8">
+            <div className="flex gap-4 items-start p-4 rounded-xl bg-white/5 border border-white/5">
+              <span className="text-xl shrink-0">💼</span>
+              <div>
+                <h4
+                  className="text-[13px] font-semibold mb-1"
+                  style={{ color: TEXT_PRIMARY }}
+                >
+                  Pemisahan Buku Kas
+                </h4>
+                <p className="text-[11px]" style={{ color: TEXT_MUTED }}>
+                  Transaksi bisnis tidak akan merusak grafik pengeluaran pribadi
+                  atau uang jajanmu.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-4 items-start p-4 rounded-xl bg-white/5 border border-white/5">
+              <span className="text-xl shrink-0">📊</span>
+              <div>
+                <h4
+                  className="text-[13px] font-semibold mb-1"
+                  style={{ color: TEXT_PRIMARY }}
+                >
+                  Dashboard Laba Rugi
+                </h4>
+                <p className="text-[11px]" style={{ color: TEXT_MUTED }}>
+                  Tinggalkan &apos;Batas Anggaran&apos;. Mode bisnis fokus
+                  melacak total Omzet, Beban, dan Laba Bersih harian.
+                </p>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={closeBizTutorial}
+            className="w-full py-4 rounded-xl text-[13px] font-bold tracking-wide hover:opacity-90 transition-all"
+            style={{
+              background: `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`,
+              color: "#0a0906",
+            }}
+          >
+            Mengerti, Mulai Berbisnis
+          </button>
+        </Modal>
+      )}
+
       <div className="relative z-10 max-w-350 mx-auto px-5 py-5 lg:px-8 lg:py-6">
-        {/* ─── Header ───────────────────────────────────────────────────────── */}
         <header className="flex justify-between items-center mb-7">
           <div className="flex items-center gap-4">
-            {/* Logo mark */}
             <div
               className="w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold"
               style={{
@@ -838,171 +990,322 @@ export default function DashboardPage() {
             >
               ₹
             </div>
-            <div>
-              <p
-                className="text-[11px] font-medium"
-                style={{ color: TEXT_MUTED }}
+            <div
+              className="hidden sm:flex p-1 rounded-xl ml-4"
+              style={{ background: SURFACE2, border: `1px solid ${BORDER}` }}
+            >
+              <button
+                onClick={() => handleSwitchWorkspace("personal")}
+                className="px-5 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition-all duration-300"
+                style={{
+                  background:
+                    activeWorkspace === "personal"
+                      ? "rgba(255,255,255,0.05)"
+                      : "transparent",
+                  color: activeWorkspace === "personal" ? GOLD : TEXT_MUTED,
+                  boxShadow:
+                    activeWorkspace === "personal"
+                      ? "0 2px 8px rgba(0,0,0,0.2)"
+                      : "none",
+                }}
               >
-                Selamat datang,
-              </p>
-              <p
-                className="text-[13px] font-semibold"
-                style={{ color: TEXT_SECONDARY }}
+                💼 Pribadi
+              </button>
+              <button
+                onClick={() => handleSwitchWorkspace("business")}
+                className="px-5 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition-all duration-300"
+                style={{
+                  background:
+                    activeWorkspace === "business"
+                      ? "rgba(255,255,255,0.05)"
+                      : "transparent",
+                  color: activeWorkspace === "business" ? GOLD : TEXT_MUTED,
+                  boxShadow:
+                    activeWorkspace === "business"
+                      ? "0 2px 8px rgba(0,0,0,0.2)"
+                      : "none",
+                }}
               >
-                {userEmail}
-              </p>
+                🚀 Bisnis
+              </button>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 rounded-xl text-[12px] font-medium transition-all"
-            style={{
-              color: TEXT_MUTED,
-              background: "rgba(255,255,255,0.03)",
-              border: `1px solid ${BORDER}`,
-            }}
-          >
-            Keluar
-          </button>
+          <div className="flex items-center gap-4">
+            <p
+              className="text-[12px] font-medium hidden md:block"
+              style={{ color: TEXT_MUTED }}
+            >
+              {userEmail}
+            </p>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 rounded-xl text-[12px] font-medium transition-all hover:bg-white/5"
+              style={{
+                color: TEXT_MUTED,
+                background: "rgba(255,255,255,0.03)",
+                border: `1px solid ${BORDER}`,
+              }}
+            >
+              Keluar
+            </button>
+          </div>
         </header>
 
-        <div className="flex flex-col lg:flex-row gap-5 items-start">
-          {/* ═══════════════════════════════════════════════════════════════════
-              LEFT COLUMN
-          ═══════════════════════════════════════════════════════════════════ */}
-          <aside className="w-full lg:w-[320px] shrink-0 flex flex-col gap-4 lg:sticky lg:top-6">
-            {/* Balance card */}
-            <Card className="p-6" style={{ background: SURFACE }}>
-              <p
-                className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-1.5"
-                style={{ color: TEXT_MUTED }}
-              >
-                Total Saldo
-              </p>
-              <h2
-                className="text-3xl font-bold tracking-tight mb-0.5 tabular-nums"
-                style={{ color: TEXT_PRIMARY }}
-              >
-                {formatRupiah(totalBalance)}
-              </h2>
-              <p className="text-[11px]" style={{ color: TEXT_MUTED }}>
-                {accounts.length} rekening terkonsolidasi
-              </p>
+        <div
+          className="flex sm:hidden mb-6 p-1 rounded-xl w-full"
+          style={{ background: SURFACE2, border: `1px solid ${BORDER}` }}
+        >
+          <button
+            onClick={() => handleSwitchWorkspace("personal")}
+            className="flex-1 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
+            style={{
+              background:
+                activeWorkspace === "personal"
+                  ? "rgba(255,255,255,0.05)"
+                  : "transparent",
+              color: activeWorkspace === "personal" ? GOLD : TEXT_MUTED,
+            }}
+          >
+            💼 Pribadi
+          </button>
+          <button
+            onClick={() => handleSwitchWorkspace("business")}
+            className="flex-1 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
+            style={{
+              background:
+                activeWorkspace === "business"
+                  ? "rgba(255,255,255,0.05)"
+                  : "transparent",
+              color: activeWorkspace === "business" ? GOLD : TEXT_MUTED,
+            }}
+          >
+            🚀 Bisnis
+          </button>
+        </div>
 
-              <div className="mt-5 space-y-1.5">
-                {accounts.map((acc) => (
-                  <div
-                    key={acc.id}
-                    className="flex justify-between items-center px-3.5 py-2.5 rounded-xl transition-colors"
+        <div className="flex flex-col lg:flex-row gap-5 items-start">
+          <aside className="w-full lg:w-[320px] shrink-0 flex flex-col gap-4 lg:sticky lg:top-6">
+            <Card
+              className="p-6 relative overflow-hidden"
+              style={{ background: SURFACE }}
+            >
+              <div
+                className="absolute inset-0 opacity-20 transition-all duration-700 pointer-events-none"
+                style={{
+                  background:
+                    activeWorkspace === "business"
+                      ? "linear-gradient(135deg, rgba(200,168,107,0.2) 0%, transparent 100%)"
+                      : "transparent",
+                }}
+              />
+
+              <div className="relative z-10">
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-1.5"
+                  style={{ color: TEXT_MUTED }}
+                >
+                  Total Saldo{" "}
+                  {activeWorkspace === "business" ? "Bisnis" : "Pribadi"}
+                </p>
+                <h2
+                  className="text-3xl font-bold tracking-tight mb-0.5 tabular-nums"
+                  style={{ color: TEXT_PRIMARY }}
+                >
+                  {formatRupiah(totalBalance)}
+                </h2>
+                <p className="text-[11px]" style={{ color: TEXT_MUTED }}>
+                  {accounts.length} rekening terkonsolidasi
+                </p>
+
+                <div className="mt-5 space-y-1.5">
+                  {accounts.map((acc) => (
+                    <div
+                      key={acc.id}
+                      className="flex justify-between items-center px-3.5 py-2.5 rounded-xl transition-colors"
+                      style={{
+                        background: "rgba(255,255,255,0.02)",
+                        border: `1px solid ${BORDER}`,
+                      }}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ background: GOLD_MUTED }}
+                        />
+                        <div>
+                          <p
+                            className="text-[12px] font-medium"
+                            style={{ color: TEXT_PRIMARY }}
+                          >
+                            {acc.name}
+                          </p>
+                          <p
+                            className="text-[10px]"
+                            style={{ color: TEXT_MUTED }}
+                          >
+                            {typeLabel[acc.type] || acc.type}
+                          </p>
+                        </div>
+                      </div>
+                      <p
+                        className="text-[12px] font-semibold tabular-nums"
+                        style={{ color: TEXT_SECONDARY }}
+                      >
+                        {formatRupiah(acc.current_balance)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => setIsAccountModalOpen(true)}
+                    className="flex-1 py-2.5 rounded-xl text-[11px] font-semibold uppercase tracking-widest transition-all hover:bg-white/5"
                     style={{
-                      background: "rgba(255,255,255,0.02)",
+                      color: TEXT_MUTED,
+                      background: "rgba(255,255,255,0.03)",
                       border: `1px solid ${BORDER}`,
                     }}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className="w-1.5 h-1.5 rounded-full"
-                        style={{ background: GOLD_MUTED }}
-                      />
-                      <div>
-                        <p
-                          className="text-[12px] font-medium"
-                          style={{ color: TEXT_PRIMARY }}
-                        >
-                          {acc.name}
-                        </p>
-                        <p
-                          className="text-[10px]"
-                          style={{ color: TEXT_MUTED }}
-                        >
-                          {typeLabel[acc.type] || acc.type}
-                        </p>
-                      </div>
-                    </div>
-                    <p
-                      className="text-[12px] font-semibold tabular-nums"
-                      style={{ color: TEXT_SECONDARY }}
-                    >
-                      {formatRupiah(acc.current_balance)}
-                    </p>
-                  </div>
-                ))}
-              </div>
+                    + Rekening
+                  </button>
+                  <button
+                    onClick={() => setIsTxModalOpen(true)}
+                    className="flex-2 py-2.5 rounded-xl text-[12px] font-semibold transition-all hover:opacity-90"
+                    style={{
+                      background: `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`,
+                      color: "#0a0906",
+                    }}
+                  >
+                    Catat Transaksi
+                  </button>
+                </div>
 
-              <div className="mt-4 flex gap-2">
+                {/* TOMBOL AI ADVISOR BARU */}
                 <button
-                  onClick={() => setIsAccountModalOpen(true)}
-                  className="flex-1 py-2.5 rounded-xl text-[11px] font-semibold uppercase tracking-widest transition-all"
-                  style={{
-                    color: TEXT_MUTED,
-                    background: "rgba(255,255,255,0.03)",
-                    border: `1px solid ${BORDER}`,
-                  }}
+                  onClick={handleAskAI}
+                  className="w-full mt-2 py-2.5 rounded-xl text-[12px] font-semibold transition-all hover:bg-white/5 border border-[rgba(200,168,107,0.3)] flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(200,168,107,0.1)]"
+                  style={{ color: GOLD }}
                 >
-                  + Rekening
-                </button>
-                <button
-                  onClick={() => setIsTxModalOpen(true)}
-                  className="flex-2 py-2.5 rounded-xl text-[12px] font-semibold transition-all"
-                  style={{
-                    background: `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`,
-                    color: "#0a0906",
-                  }}
-                >
-                  Catat Transaksi
+                  <span className="text-[14px]">🤖</span> Analisis AI
                 </button>
               </div>
             </Card>
 
-            {/* Subscription radar */}
-            <Card className="p-5">
-              <SectionHeading>Tagihan Berulang</SectionHeading>
-              <SubscriptionRadar subscriptions={subscriptions} />
-            </Card>
+            {activeWorkspace === "personal" && (
+              <Card className="p-5 animate-[fadeIn_0.5s_ease-out]">
+                <SectionHeading>Tagihan Berulang</SectionHeading>
+                <SubscriptionRadar subscriptions={subscriptions} />
+              </Card>
+            )}
           </aside>
 
-          {/* ═══════════════════════════════════════════════════════════════════
-              RIGHT COLUMN
-          ═══════════════════════════════════════════════════════════════════ */}
           <div className="flex-1 flex flex-col gap-4 min-w-0">
-            {/* Expense chart */}
+            {activeWorkspace === "business" && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-[fadeIn_0.5s_ease-out]">
+                <Card className="p-5 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-linear-to-bl from-emerald-500/10 to-transparent rounded-bl-full pointer-events-none" />
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-widest mb-1"
+                    style={{ color: TEXT_MUTED }}
+                  >
+                    Total Omzet
+                  </p>
+                  <h3
+                    className="text-xl font-bold tabular-nums"
+                    style={{ color: EMERALD }}
+                  >
+                    {formatRupiah(bizIncome)}
+                  </h3>
+                </Card>
+                <Card className="p-5 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-linear-to-bl from-rose-500/10 to-transparent rounded-bl-full pointer-events-none" />
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-widest mb-1"
+                    style={{ color: TEXT_MUTED }}
+                  >
+                    Total Beban
+                  </p>
+                  <h3
+                    className="text-xl font-bold tabular-nums"
+                    style={{ color: CORAL }}
+                  >
+                    {formatRupiah(bizExpense)}
+                  </h3>
+                </Card>
+                <Card className="p-5 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-linear-to-bl from-amber-500/10 to-transparent rounded-bl-full pointer-events-none" />
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p
+                        className="text-[10px] font-semibold uppercase tracking-widest mb-1"
+                        style={{ color: TEXT_MUTED }}
+                      >
+                        Laba Bersih
+                      </p>
+                      <h3
+                        className="text-xl font-bold tabular-nums"
+                        style={{ color: netProfit >= 0 ? GOLD : CORAL }}
+                      >
+                        {formatRupiah(netProfit)}
+                      </h3>
+                    </div>
+                    <div
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold"
+                      style={{
+                        background: "rgba(200,168,107,0.1)",
+                        color: GOLD,
+                      }}
+                    >
+                      Margin {profitMargin}%
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
+
             <Card className="p-6">
-              <SectionHeading>Distribusi Pengeluaran</SectionHeading>
-              <ExpenseChart transactions={transactions} />
+              <SectionHeading>
+                Distribusi Pengeluaran{" "}
+                {activeWorkspace === "business" ? "Bisnis" : "Pribadi"}
+              </SectionHeading>
+              <ExpenseChart transactions={activeTransactions} />
             </Card>
 
-            {/* Budget + Goals */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card className="p-6">
-                <SectionHeading>Batas Anggaran</SectionHeading>
-                <BudgetProgress budgets={budgets} transactions={transactions} />
-              </Card>
-              <Card className="p-6">
-                <SectionHeading>Target Finansial</SectionHeading>
-                <FinancialGoals
-                  goals={goals}
-                  onOpenTopUp={(id, name) => {
-                    setSelectedGoalId(id);
-                    setSelectedGoalName(name);
-                    setIsGoalModalOpen(true);
-                  }}
-                />
-              </Card>
-            </div>
+            {activeWorkspace === "personal" && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-[fadeIn_0.5s_ease-out]">
+                <Card className="p-6">
+                  <SectionHeading>Batas Anggaran</SectionHeading>
+                  <BudgetProgress
+                    budgets={budgets}
+                    transactions={activeTransactions}
+                  />
+                </Card>
+                <Card className="p-6">
+                  <SectionHeading>Target Finansial</SectionHeading>
+                  <FinancialGoals
+                    goals={goals}
+                    onOpenTopUp={(id, name) => {
+                      setSelectedGoalId(id);
+                      setSelectedGoalName(name);
+                      setIsGoalModalOpen(true);
+                    }}
+                  />
+                </Card>
+              </div>
+            )}
 
-            {/* Transaction history */}
             <Card className="p-6 flex flex-col" style={{ minHeight: "320px" }}>
               <SectionHeading>Riwayat Pergerakan Kas</SectionHeading>
-
-              {historyItems.length === 0 ? (
+              {activeHistoryItems.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center">
                   <p className="text-[13px]" style={{ color: TEXT_MUTED }}>
-                    Belum ada pergerakan kas.
+                    Belum ada pergerakan kas di workspace ini.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-1.5 overflow-y-auto">
-                  {historyItems.map((item) => {
+                  {activeHistoryItems.map((item) => {
                     const isIncome = item.type === "income";
                     const isTransfer = item.type === "transfer";
                     const dotColor = isIncome
@@ -1035,7 +1338,6 @@ export default function DashboardPage() {
                         }}
                       >
                         <div className="flex items-center gap-3">
-                          {/* Type indicator */}
                           <div
                             className="w-8 h-8 rounded-xl flex items-center justify-center text-[12px] font-bold shrink-0"
                             style={{
@@ -1057,14 +1359,10 @@ export default function DashboardPage() {
                               className="text-[11px] mt-0.5"
                               style={{ color: TEXT_MUTED }}
                             >
-                              {item.accountName}
-                              {" · "}
+                              {item.accountName} {" · "}{" "}
                               {new Date(item.created_at).toLocaleDateString(
                                 "id-ID",
-                                {
-                                  day: "numeric",
-                                  month: "short",
-                                },
+                                { day: "numeric", month: "short" },
                               )}
                             </p>
                           </div>
@@ -1086,9 +1384,102 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          GOAL TOP-UP MODAL
-      ═══════════════════════════════════════════════════════════════════════ */}
+      {/* ─── MODAL AI ADVISOR ────────────────────────────────────────────────── */}
+      {isAiModalOpen && (
+        <Modal onClose={() => setIsAiModalOpen(false)} maxWidth="max-w-xl">
+          <div className="mb-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-[0_0_15px_rgba(200,168,107,0.2)]"
+                style={{
+                  background: `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`,
+                }}
+              >
+                🤖
+              </div>
+              <div>
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-[0.14em]"
+                  style={{ color: GOLD }}
+                >
+                  AI Financial Advisor
+                </p>
+                <h2
+                  className="text-xl font-bold"
+                  style={{ color: TEXT_PRIMARY }}
+                >
+                  Hasil Analisis
+                </h2>
+              </div>
+            </div>
+          </div>
+
+          {isAiLoading ? (
+            <div className="py-10 flex flex-col items-center justify-center gap-4">
+              <div
+                className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: `${GOLD} transparent ${GOLD} ${GOLD}` }}
+              />
+              <p
+                className="text-[12px] animate-pulse"
+                style={{ color: TEXT_MUTED }}
+              >
+                AI sedang membaca buku kasmu...
+              </p>
+            </div>
+          ) : aiResponse ? (
+            <div className="space-y-4">
+              {/* Box Roasting */}
+              <div
+                className="p-5 rounded-xl relative overflow-hidden group"
+                style={{
+                  background: "rgba(232,115,90,0.05)",
+                  border: `1px solid rgba(232,115,90,0.2)`,
+                }}
+              >
+                <div className="absolute top-0 right-0 w-24 h-24 bg-linear-to-bl from-rose-500/10 to-transparent rounded-bl-full pointer-events-none" />
+                <h3
+                  className="text-[12px] font-bold uppercase tracking-widest mb-2 flex items-center gap-2"
+                  style={{ color: CORAL }}
+                >
+                  <span>🔥</span> Roasting Session
+                </h3>
+                <p
+                  className="text-[13px] leading-relaxed italic"
+                  style={{ color: TEXT_PRIMARY }}
+                >
+                  &quot;{aiResponse.roast}&quot;
+                </p>
+              </div>
+
+              {/* Box Insight */}
+              <div
+                className="p-5 rounded-xl relative overflow-hidden group"
+                style={{
+                  background: "rgba(200,168,107,0.05)",
+                  border: `1px solid rgba(200,168,107,0.2)`,
+                }}
+              >
+                <div className="absolute top-0 right-0 w-24 h-24 bg-linear-to-bl from-amber-500/10 to-transparent rounded-bl-full pointer-events-none" />
+                <h3
+                  className="text-[12px] font-bold uppercase tracking-widest mb-2 flex items-center gap-2"
+                  style={{ color: GOLD }}
+                >
+                  <span>💡</span> Executive Insight
+                </h3>
+                <p
+                  className="text-[13px] leading-relaxed"
+                  style={{ color: TEXT_PRIMARY }}
+                >
+                  {aiResponse.insight}
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </Modal>
+      )}
+
+      {/* ─── SISA MODAL LAINNYA ─────────────────────────────────────────────── */}
       {isGoalModalOpen && (
         <Modal onClose={() => setIsGoalModalOpen(false)}>
           <div className="mb-6">
@@ -1134,7 +1525,7 @@ export default function DashboardPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3.5 rounded-xl text-[13px] font-semibold mt-2 transition-all"
+              className="w-full py-3.5 rounded-xl text-[13px] font-semibold mt-2 transition-all hover:opacity-90"
               style={{
                 background: `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`,
                 color: "#0a0906",
@@ -1147,9 +1538,6 @@ export default function DashboardPage() {
         </Modal>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          TRANSACTION MODAL
-      ═══════════════════════════════════════════════════════════════════════ */}
       {isTxModalOpen && (
         <Modal onClose={() => setIsTxModalOpen(false)}>
           <div className="mb-6">
@@ -1157,14 +1545,13 @@ export default function DashboardPage() {
               className="text-[10px] font-semibold uppercase tracking-[0.14em] mb-2"
               style={{ color: GOLD }}
             >
-              Catat Transaksi
+              Catat Transaksi{" "}
+              {activeWorkspace === "business" ? "Bisnis" : "Pribadi"}
             </p>
             <h2 className="text-xl font-bold" style={{ color: TEXT_PRIMARY }}>
               Tambah Baru
             </h2>
           </div>
-
-          {/* AI Scan buttons */}
           <div className="grid grid-cols-2 gap-2 mb-5">
             {(["camera", "gallery"] as const).map((mode) => (
               <label
@@ -1220,9 +1607,7 @@ export default function DashboardPage() {
               </label>
             ))}
           </div>
-
           <form onSubmit={handleAddTransaction} className="space-y-4">
-            {/* Type selector */}
             <div
               className="flex p-0.5 rounded-xl"
               style={{
@@ -1231,7 +1616,19 @@ export default function DashboardPage() {
               }}
             >
               {(["expense", "income", "transfer"] as const).map((t) => {
-                const cfg = txTypeConfig[t];
+                const cfg = {
+                  expense: {
+                    label: "Pengeluaran",
+                    color: CORAL,
+                    bg: `${CORAL}15`,
+                  },
+                  income: { label: "Pemasukan", color: GOLD, bg: `${GOLD}15` },
+                  transfer: {
+                    label: "Transfer",
+                    color: "#a89880",
+                    bg: "rgba(168,152,128,0.1)",
+                  },
+                }[t];
                 const active = txType === t;
                 return (
                   <button
@@ -1256,7 +1653,6 @@ export default function DashboardPage() {
                 );
               })}
             </div>
-
             <div>
               <FieldLabel>
                 {txType === "transfer" ? "Dari Dompet" : "Pilih Dompet"}
@@ -1276,7 +1672,6 @@ export default function DashboardPage() {
                 ))}
               </GoldSelect>
             </div>
-
             {txType === "transfer" ? (
               <div>
                 <FieldLabel>Ke Dompet</FieldLabel>
@@ -1306,15 +1701,16 @@ export default function DashboardPage() {
                   <option value="" disabled>
                     Pilih kategori...
                   </option>
-                  {filteredCategories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
+                  {categories
+                    .filter((c) => c.type === txType)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
                 </GoldSelect>
               </div>
             )}
-
             <div>
               <FieldLabel>Nominal (Rp)</FieldLabel>
               <GoldInput
@@ -1326,7 +1722,6 @@ export default function DashboardPage() {
                 placeholder="0"
               />
             </div>
-
             <div>
               <FieldLabel>Catatan</FieldLabel>
               <GoldInput
@@ -1336,11 +1731,10 @@ export default function DashboardPage() {
                 placeholder="Opsional..."
               />
             </div>
-
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3.5 rounded-xl text-[13px] font-semibold transition-all"
+              className="w-full py-3.5 rounded-xl text-[13px] font-semibold transition-all hover:opacity-90"
               style={{
                 background:
                   txType === "income"
@@ -1358,9 +1752,6 @@ export default function DashboardPage() {
         </Modal>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          ADD ACCOUNT MODAL
-      ═══════════════════════════════════════════════════════════════════════ */}
       {isAccountModalOpen && (
         <Modal onClose={() => setIsAccountModalOpen(false)}>
           <div className="mb-6">
@@ -1410,7 +1801,7 @@ export default function DashboardPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3.5 rounded-xl text-[13px] font-semibold mt-2 transition-all"
+              className="w-full py-3.5 rounded-xl text-[13px] font-semibold mt-2 transition-all hover:opacity-90"
               style={{
                 background: `linear-gradient(135deg, ${GOLD_MUTED}, ${GOLD})`,
                 color: "#0a0906",
